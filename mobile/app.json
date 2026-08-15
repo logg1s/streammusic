@@ -19,7 +19,8 @@
       "expo-secure-store",
       "expo-web-browser",
       "./modules/vong-audio/app.plugin.js",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "./plugins/with-release-signing.js"
     ],
     "extra": {
       "origin": "https://streammusic.vercel.app"

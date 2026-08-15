@@ -61,3 +61,5 @@ mobile/*.jks
 
 # anh chup man hinh may ao
 .shots/
+mobile/credentials/
+/Vong_*.apk

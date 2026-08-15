@@ -254,6 +254,20 @@ npx expo run:android   # build + cài development build (cần JDK 17 + Android 
 npm start              # Metro cho development build đã cài
 ```
 
+Build release (APK ký thật, origin production — cài được lên máy thật, không cần Metro):
+
+```bash
+cd mobile && npx expo prebuild --platform android   # sinh android/, plugin tự chèn signing
+cd android && ./gradlew :app:assembleRelease \
+  -PreactNativeArchitectures=arm64-v8a \
+  -PVONG_UPLOAD_STORE_PASSWORD="$(cat ../credentials/keystore-pass.txt)"
+# ra file android/app/build/outputs/apk/release/app-release.apk
+```
+
+Keystore nằm ở `mobile/credentials/vong-release.jks` (gitignore, đừng làm mất —
+mất là không cập nhật được app đã cài). Windows chú ý đường dẫn dài: tạo junction
+`mklink /J C:\vb <repo>` rồi build từ `C:\vb\mobile\android`.
+
 `npm run verify` không cần database hay OAuth. Nó tải tag của vài file nhạc công
 khai và in ra số byte thực sự tải về — dùng để xác nhận rằng việc quét không kéo
 cả file về. Kết quả đo thực tế: **2% với file MP3, 25% với file M4A, 5 request/bài**.
