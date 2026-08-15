@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TrackList } from "@/components/library/track-list";
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
 
 interface Section {
   title: string;

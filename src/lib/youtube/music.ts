@@ -1,15 +1,15 @@
 import { Innertube, YTNodes } from "youtubei.js";
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
 import {
   LONG_FORM,
   MAX_DURATION_SEC,
   MIN_DURATION_SEC,
   splitArtistTitle,
-} from "@/lib/youtube/parse";
+} from "@vong/shared";
 import { LANGUAGE_CODE, REGION_CODE } from "@/lib/youtube/locale";
 import { innertube } from "@/lib/youtube/resolve";
 import { upsertYoutubeTracks } from "@/lib/youtube/store";
-import { toPlayableTrack } from "@/lib/youtube/track";
+import { toPlayableTrack } from "@vong/shared";
 
 /**
  * Các mặt của YouTube Music qua InnerTube (chỉ chạy phía server).

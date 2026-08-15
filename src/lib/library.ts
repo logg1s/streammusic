@@ -18,43 +18,33 @@ import {
   playEvents,
   tracks,
   youtubeTracks,
-  type StorageProviderId,
 } from "@/db/schema";
-import { toPlayableTrack } from "@/lib/youtube/track";
+import { toPlayableTrack } from "@vong/shared";
+import type {
+  AlbumSummary,
+  PlayableTrack,
+  TrackSource,
+} from "@vong/shared";
 
-/** Bài phát ra từ đâu: file trong kho đám mây, hay video YouTube. */
-export type TrackSource = "library" | "youtube";
+/*
+  Hình dạng dữ liệu (`PlayableTrack`, `AlbumSummary`, `TrackSource`) nằm ở
+  `@vong/shared` vì vỏ Expo và Tauri cũng đọc đúng những DTO này qua API. File này chỉ
+  còn truy vấn.
 
-/** Hình dạng tối thiểu mà player cần — dùng chung giữa server và client. */
-export interface PlayableTrack {
-  /** Thư viện: uuid. YouTube: "yt:<videoId>" — id phải duy nhất vì hồ <audio> và panel hàng đợi khoá theo nó. */
-  id: string;
-  source: TrackSource;
-  youtubeVideoId: string | null;
-  title: string;
-  artistId: string | null;
-  artistName: string | null;
-  albumId: string | null;
-  albumName: string | null;
-  coverUrl: string | null;
-  durationSec: number | null;
-  trackNo: number | null;
-  discNo: number | null;
-  /* Ba trường dưới đây nuôi dải thông số ở thanh phát:
-     cho thấy byte đang chảy về từ đâu và ở chất lượng nào. */
-  provider: StorageProviderId | null;
-  codec: string | null;
-  bitrate: number | null;
-}
+  `StorageProviderId` trong shared là union khai tay; nếu `storageProviderEnum` ở
+  `src/db/schema.ts` thay đổi thì `trackColumns.provider` bên dưới không compile —
+  đó là chốt chặn duy nhất giữ hai bên khớp nhau.
+*/
 
-export interface AlbumSummary {
-  id: string;
-  title: string;
-  year: number | null;
-  coverUrl: string | null;
-  artistId: string | null;
-  artistName: string | null;
-  trackCount: number;
+/**
+ * Chặn chuỗi rác trước khi nó tới Postgres: cột id là `uuid`, so sánh với chuỗi không
+ * đúng khuôn làm Postgres ném lỗi cast **trước khi** `WHERE` kịp chạy — tức là URL kiểu
+ * `/albums/abc` trả 500 thay vì 404. Mọi hàm nhận id từ URL phải đi qua đây.
+ */
+export function isUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    id,
+  );
 }
 
 /**
@@ -269,6 +259,7 @@ export async function getAlbums(userId: string): Promise<AlbumSummary[]> {
 }
 
 export async function getAlbum(userId: string, albumId: string) {
+  if (!isUuid(albumId)) return null;
   const [album] = await getDb()
     .select({
       id: albums.id,
@@ -307,6 +298,7 @@ export async function getArtists(userId: string) {
 }
 
 export async function getArtist(userId: string, artistId: string) {
+  if (!isUuid(artistId)) return null;
   const [artist] = await getDb()
     .select({ id: artists.id, name: artists.name })
     .from(artists)

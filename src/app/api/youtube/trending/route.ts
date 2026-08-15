@@ -1,6 +1,6 @@
 import { requireUserId } from "@/lib/auth";
 import { toErrorResponse } from "@/lib/http";
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
 import { listTrendingMusic } from "@/lib/youtube/api";
 import { REGION_CODE } from "@/lib/youtube/locale";
 import { persistHits } from "@/lib/youtube/music";

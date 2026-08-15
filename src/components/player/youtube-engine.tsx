@@ -7,6 +7,7 @@ import {
   useCurrentTrack,
   usePlayer,
 } from "@/store/player";
+import { reportBlocked } from "@/lib/radio-client";
 import { cn } from "@/lib/utils";
 
 /**
@@ -209,15 +210,7 @@ export function YouTubeEngine() {
             const current = peekCurrentTrack();
             if (current?.source !== "youtube" || !current.youtubeVideoId)
               return;
-            void fetch("/api/radio/feedback", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                videoId: current.youtubeVideoId,
-                artistName: current.artistName,
-                signal: "block",
-              }),
-            }).catch(() => {});
+            reportBlocked(current.youtubeVideoId, current.artistName);
             usePlayer.getState().next();
           },
         },

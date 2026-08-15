@@ -21,7 +21,7 @@ import {
   refreshYoutubeAccessToken,
   YoutubeReauthError,
 } from "@/lib/youtube/account";
-import { channelArtistName, normalizeKey, splitArtistTitle } from "@/lib/youtube/parse";
+import { channelArtistName, normalizeKey, splitArtistTitle } from "@vong/shared";
 import { upsertYoutubeTracks, type YoutubeTrackInput } from "@/lib/youtube/store";
 
 /**

@@ -10,21 +10,10 @@ import {
   youtubeTracks,
   type Playlist,
 } from "@/db/schema";
-import { trackColumns, type PlayableTrack } from "@/lib/library";
+import type { PlayableTrack, PlaylistSummary } from "@vong/shared";
+import { parseYoutubeTrackId, toPlayableTrack } from "@vong/shared";
+import { isUuid, trackColumns } from "@/lib/library";
 import { PlaylistInputError } from "@/lib/http";
-import { parseYoutubeTrackId, toPlayableTrack } from "@/lib/youtube/track";
-
-/** id thư viện là uuid; chặn ở đây để chuỗi rác không làm Postgres ném lỗi cast. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export interface PlaylistSummary {
-  id: string;
-  name: string;
-  seedLabel: string | null;
-  createdAt: Date;
-  itemCount: number;
-}
 
 export async function listPlaylists(
   userId: string,
@@ -60,7 +49,7 @@ async function resolveItemRefs(
   for (const id of ids) {
     const videoId = parseYoutubeTrackId(id);
     if (videoId) videoIds.push(videoId);
-    else if (UUID_RE.test(id)) trackIds.push(id);
+    else if (isUuid(id)) trackIds.push(id);
   }
 
   const [ownedTracks, cachedVideos] = await Promise.all([
@@ -126,7 +115,7 @@ export async function getPlaylist(
   playlist: Playlist;
   items: Array<{ itemId: string; track: PlayableTrack }>;
 } | null> {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const db = getDb();
 
   const [playlist] = await db
@@ -195,7 +184,7 @@ export async function deletePlaylist(
   userId: string,
   id: string,
 ): Promise<boolean> {
-  if (!UUID_RE.test(id)) return false;
+  if (!isUuid(id)) return false;
   const deleted = await getDb()
     .delete(playlists)
     .where(and(eq(playlists.id, id), eq(playlists.userId, userId)))
@@ -208,7 +197,7 @@ export async function removePlaylistItem(
   playlistId: string,
   itemId: string,
 ): Promise<boolean> {
-  if (!UUID_RE.test(playlistId) || !UUID_RE.test(itemId)) return false;
+  if (!isUuid(playlistId) || !isUuid(itemId)) return false;
   const db = getDb();
 
   // Quyền sở hữu nằm ở bảng playlists, nên điều kiện chủ sở hữu đi kèm ngay
@@ -235,7 +224,7 @@ export async function removePlaylistItem(
 
 /** Playlist có thuộc user này không. Mọi hàm ghi bên dưới đều phải hỏi trước. */
 async function ownsPlaylist(userId: string, id: string): Promise<boolean> {
-  if (!UUID_RE.test(id)) return false;
+  if (!isUuid(id)) return false;
   const [row] = await getDb()
     .select({ id: playlists.id })
     .from(playlists)
@@ -331,7 +320,7 @@ export async function renamePlaylist(
   const trimmed = name.trim();
   if (trimmed.length === 0) throw new PlaylistInputError("Thiếu tên playlist");
   // Chuỗi rác làm Postgres ném lỗi cast trước khi WHERE kịp chạy.
-  if (!UUID_RE.test(playlistId)) {
+  if (!isUuid(playlistId)) {
     throw new PlaylistInputError("Không tìm thấy playlist");
   }
 

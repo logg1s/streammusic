@@ -1,7 +1,7 @@
 import { readErrorBody } from "@/lib/providers";
 import { YoutubeReauthError } from "@/lib/youtube/account";
 import { LANGUAGE_CODE, REGION_CODE } from "@/lib/youtube/locale";
-import { parseIso8601Duration } from "@/lib/youtube/parse";
+import { parseIso8601Duration } from "@vong/shared";
 
 /**
  * Lớp gọi YouTube Data API v3 (chỉ chạy phía server).

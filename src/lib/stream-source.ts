@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { connections, tracks, type Connection } from "@/db/schema";
+import { isUuid } from "@/lib/library";
 
 /**
  * Nạp mọi thứ endpoint stream cần, trong MỘT truy vấn, có cache ngắn hạn.
@@ -45,6 +46,9 @@ export async function loadStreamSource(
   userId: string,
   trackId: string,
 ): Promise<StreamSource | null> {
+  // Id bài YouTube (`yt:<videoId>`) không phải uuid: để nguyên thì Postgres ném lỗi cast
+  // và route trả 500 thay vì 404. Bài YouTube không đi qua `/api/stream` bao giờ.
+  if (!isUuid(trackId)) return null;
   const key = cacheKey(userId, trackId);
   const hit = cache.get(key);
   if (hit && hit.expiresAt > Date.now()) return hit.value;

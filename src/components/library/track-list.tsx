@@ -13,7 +13,7 @@ import { AddToPlaylist } from "@/components/library/add-to-playlist";
 import { Cover } from "@/components/library/cover";
 import { Equalizer } from "@/components/player/equalizer";
 import { useRadioConfig } from "@/components/player/radio-context";
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
 import { startRadioFor } from "@/lib/radio-client";
 import { cn, formatDuration } from "@/lib/utils";
 import { usePlayer } from "@/store/player";

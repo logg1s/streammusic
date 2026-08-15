@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // `@vong/shared` là TS thuần, không build sẵn: Next phải tự transpile.
+  transpilePackages: ["@vong/shared"],
   // music-metadata và @tokenizer/range là ESM thuần, chỉ chạy phía server.
   // youtubei.js dùng `node:` builtins nên bundler không được đóng gói nó.
   serverExternalPackages: ["music-metadata", "@tokenizer/range", "youtubei.js"],

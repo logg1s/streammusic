@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TrackList } from "@/components/library/track-list";
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
 
 export interface PlaylistTrackItem {
   itemId: string;

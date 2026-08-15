@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { radioFeedback, youtubeTracks } from "@/db/schema";
 import { requireUserId } from "@/lib/auth";
 import { jsonError, toErrorResponse } from "@/lib/http";
-import { normalizeKey } from "@/lib/youtube/parse";
+import { normalizeKey } from "@vong/shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

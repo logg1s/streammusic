@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Cover } from "@/components/library/cover";
-import type { AlbumSummary } from "@/lib/library";
+import type { AlbumSummary } from "@vong/shared";
 
 export function AlbumGrid({
   albums,

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, X } from "lucide-react";
-import type { PlaylistSummary } from "@/lib/playlists";
+import type { PlaylistSummary } from "@vong/shared";
 
 /*
   Múi giờ cố định: server và client cùng render danh sách này, để Intl tự đoán

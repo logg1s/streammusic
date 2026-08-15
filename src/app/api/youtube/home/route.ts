@@ -1,6 +1,6 @@
 import { requireUserId } from "@/lib/auth";
 import { toErrorResponse } from "@/lib/http";
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
 import { getRecentPlaySeeds } from "@/lib/library";
 import { homeSections, persistHits, relatedSongs } from "@/lib/youtube/music";
 

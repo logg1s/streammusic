@@ -1,4 +1,4 @@
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "./types";
 
 /** Id trong hàng đợi của bài YouTube: "yt:<videoId>". Giữ ở đây để client và server dùng chung. */
 export const YOUTUBE_ID_PREFIX = "yt:";

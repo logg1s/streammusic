@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ListPlus, X } from "lucide-react";
-import type { PlayableTrack } from "@/lib/library";
-import type { PlaylistSummary } from "@/lib/playlists";
+import type { PlayableTrack } from "@vong/shared";
+import type { PlaylistSummary } from "@vong/shared";
 
 /**
  * Hộp chọn playlist để thêm một bài vào.

@@ -1,8 +1,8 @@
 import { requireUserId } from "@/lib/auth";
 import { jsonError, toErrorResponse } from "@/lib/http";
-import type { PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
 import { persistHits, searchSongs } from "@/lib/youtube/music";
-import { normalizeKey } from "@/lib/youtube/parse";
+import { normalizeKey } from "@vong/shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

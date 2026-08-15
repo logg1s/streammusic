@@ -9,7 +9,8 @@ import {
   youtubeTasteVideos,
   youtubeTracks,
 } from "@/db/schema";
-import { getTrackById, type PlayableTrack } from "@/lib/library";
+import type { PlayableTrack } from "@vong/shared";
+import { getTrackById } from "@/lib/library";
 import {
   getYoutubeAccessToken,
   markYoutubeNeedsReauth,
@@ -37,14 +38,14 @@ import {
   PLAYLIST_JUNK,
   sameArtistKey,
   splitArtistTitle,
-} from "@/lib/youtube/parse";
+} from "@vong/shared";
 import { upsertYoutubeTracks } from "@/lib/youtube/store";
 import {
   loadTasteProfile,
   refreshTasteIfStale,
   type TasteProfile,
 } from "@/lib/youtube/taste";
-import { parseYoutubeTrackId, toPlayableTrack } from "@/lib/youtube/track";
+import { parseYoutubeTrackId, toPlayableTrack } from "@vong/shared";
 
 /**
  * Automix của YouTube Music không tốn quota, nên cache chỉ cần đủ để một phiên
