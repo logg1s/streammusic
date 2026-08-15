@@ -247,6 +247,15 @@ export function useCurrentTrack(): PlayableTrack | null {
 }
 
 /**
+ * Bài hiện tại, đọc ngoài React. AudioEngine cần bản không-hook này để `reconcile()`
+ * lấy được trạng thái mới nhất mà không phụ thuộc vào chu kỳ render.
+ */
+export function peekCurrentTrack(): PlayableTrack | null {
+  const { queue, order, position } = usePlayer.getState();
+  return queue[order[position]] ?? null;
+}
+
+/**
  * Bài sẽ phát tiếp theo, không thay đổi state gì cả.
  *
  * AudioEngine dùng cái này để nạp sẵn bài kế vào thẻ audio dự phòng. Trả null khi
@@ -258,6 +267,22 @@ export function peekNextTrack(): PlayableTrack | null {
 
   if (position + 1 < order.length) return queue[order[position + 1]] ?? null;
   if (repeat === "all") return queue[order[0]] ?? null;
+  return null;
+}
+
+/**
+ * Bài liền trước, không thay đổi state gì cả.
+ *
+ * AudioEngine dùng để biết thẻ nào cần GIỮ LẠI thay vì tái dùng. Bài vừa phát xong
+ * vẫn còn nguyên trong thẻ cũ, nên chỉ cần không hi sinh thẻ đó là prev tức thì mà
+ * không tốn thêm một byte băng thông nào.
+ */
+export function peekPrevTrack(): PlayableTrack | null {
+  const { queue, order, position, repeat } = usePlayer.getState();
+  if (order.length === 0) return null;
+
+  if (position > 0) return queue[order[position - 1]] ?? null;
+  if (repeat === "all") return queue[order[order.length - 1]] ?? null;
   return null;
 }
 
