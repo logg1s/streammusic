@@ -6,6 +6,7 @@ import {
   MIN_DURATION_SEC,
   splitArtistTitle,
 } from "@/lib/youtube/parse";
+import { LANGUAGE_CODE, REGION_CODE } from "@/lib/youtube/locale";
 import { innertube } from "@/lib/youtube/resolve";
 import { upsertYoutubeTracks } from "@/lib/youtube/store";
 import { toPlayableTrack } from "@/lib/youtube/track";
@@ -48,7 +49,12 @@ async function feedSession(): Promise<Innertube> {
   const cookie = process.env.YT_MUSIC_COOKIE;
   if (!cookie) return innertube();
   if (cachedFeed) return cachedFeed;
-  cachedFeed = await Innertube.create({ cookie, retrieve_player: false });
+  cachedFeed = await Innertube.create({
+    cookie,
+    lang: LANGUAGE_CODE,
+    location: REGION_CODE,
+    retrieve_player: false,
+  });
   return cachedFeed;
 }
 

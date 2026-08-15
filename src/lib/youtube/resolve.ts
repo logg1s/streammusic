@@ -5,6 +5,7 @@ import {
   VideoUnplayableError,
   YoutubeBlockedError,
 } from "@/lib/youtube/errors";
+import { LANGUAGE_CODE, REGION_CODE } from "@/lib/youtube/locale";
 
 /**
  * Lấy URL audio thật của một video YouTube (chỉ chạy phía server).
@@ -53,10 +54,15 @@ let cachedVisitorData: string | undefined;
  * `retrieve_player: false` bỏ hẳn việc tải + eval player JS — đúng vì hai client
  * trên đã trả `url` thuần. `visitorData` khách là thứ biến `LOGIN_REQUIRED`
  * thành `OK`, nên giữ lại giữa các lần gọi.
+ *
+ * `lang`/`location` ghim theo `locale.ts`: InnerTube đoán vùng theo IP máy gọi, nên
+ * máy chủ ở Mỹ sẽ trả gợi ý Mỹ. Ghim để chạy ở đâu cũng ra cùng thứ nhạc.
  */
 export async function innertube(): Promise<Innertube> {
   if (cached) return cached;
   const yt = await Innertube.create({
+    lang: LANGUAGE_CODE,
+    location: REGION_CODE,
     retrieve_player: false,
     generate_session_locally: false,
     enable_session_cache: false,

@@ -250,6 +250,12 @@ export function YouTubeEngine() {
       <div className="aspect-video w-full">
         <div ref={hostRef} className="size-full" />
       </div>
+      {/* Khung này chỉ hiện khi đường tải trực tiếp bị chặn, nên nói luôn cái giá
+          phải trả: iframe cross-origin không phát nền khi khoá máy được. */}
+      <p className="px-2.5 pb-2 pt-1.5 text-[11px] leading-snug text-subtle">
+        YouTube chặn máy chủ tải trực tiếp bài này, nên đang phát bằng player
+        nhúng — khoá máy là nhạc dừng.
+      </p>
     </div>
   );
 }

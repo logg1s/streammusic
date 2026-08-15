@@ -1,5 +1,6 @@
 import { readErrorBody } from "@/lib/providers";
 import { YoutubeReauthError } from "@/lib/youtube/account";
+import { LANGUAGE_CODE, REGION_CODE } from "@/lib/youtube/locale";
 import { parseIso8601Duration } from "@/lib/youtube/parse";
 
 /**
@@ -15,10 +16,6 @@ import { parseIso8601Duration } from "@/lib/youtube/parse";
  */
 
 const API = "https://www.googleapis.com/youtube/v3";
-
-/** Giao diện và thư viện là tiếng Việt nên xin kết quả theo thị trường VN. */
-export const REGION_CODE = "VN";
-const RELEVANCE_LANGUAGE = "vi";
 
 /** Category "Music" — lọc bỏ podcast, gameplay, vlog lọt vào kết quả tìm kiếm. */
 export const MUSIC_CATEGORY_ID = "10";
@@ -216,7 +213,7 @@ export async function searchPlaylists(
       q: query,
       maxResults: String(limit),
       regionCode: REGION_CODE,
-      relevanceLanguage: RELEVANCE_LANGUAGE,
+      relevanceLanguage: LANGUAGE_CODE,
       safeSearch: "none",
     },
     accessToken,
@@ -251,7 +248,7 @@ export async function searchMusicVideos(
       videoSyndicated: "true",
       order: "relevance",
       regionCode: REGION_CODE,
-      relevanceLanguage: RELEVANCE_LANGUAGE,
+      relevanceLanguage: LANGUAGE_CODE,
       safeSearch: "none",
     },
     accessToken,
