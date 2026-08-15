@@ -86,7 +86,15 @@ function fromTwoRowItem(item: YTNodes.MusicTwoRowItem): MusicHit | null {
   };
 }
 
-/** Tìm bài trên YouTube Music. Kết quả đã là "bài hát", không phải video bất kỳ. */
+/**
+ * Tìm bài trên YouTube Music. Kết quả đã là "bài hát", không phải video bất kỳ.
+ *
+ * KHÔNG dùng `search.songs`: getter đó của youtubei.js so tiêu đề kệ với đúng chuỗi
+ * tiếng Anh `"Songs"`, nên với phiên `lang: "vi"` (kệ tên "Bài hát") nó luôn trả
+ * `undefined` — đo được: mọi từ khoá đều ra 0 kết quả. Quét mọi kệ rồi lọc theo
+ * `item_type` thay vì theo tên: `item_type` suy từ `musicVideoType`/`pageType` nên
+ * không phụ thuộc ngôn ngữ, và item của kệ album/nghệ sĩ tự bị `fromListItem` loại.
+ */
 export async function searchSongs(
   query: string,
   limit: number,
@@ -95,11 +103,12 @@ export async function searchSongs(
   const search = await yt.music.search(query, { type: "song" });
   const hits: MusicHit[] = [];
 
-  for (const item of search.songs?.contents ?? []) {
-    const node = item.as(YTNodes.MusicResponsiveListItem);
-    const hit = fromListItem(node);
-    if (hit) hits.push(hit);
-    if (hits.length >= limit) break;
+  for (const shelf of search.contents?.filterType(YTNodes.MusicShelf) ?? []) {
+    for (const item of shelf.contents) {
+      const hit = fromListItem(item);
+      if (hit) hits.push(hit);
+      if (hits.length >= limit) return hits;
+    }
   }
   return hits;
 }
