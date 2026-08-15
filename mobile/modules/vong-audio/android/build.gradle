@@ -1,0 +1,27 @@
+// Bản dựng của module native `vong-audio`.
+//
+// `expo-module-gradle-plugin` đã tự áp plugin Kotlin, compileSdk/minSdk và cấu hình
+// KotlinOptions theo phiên bản Expo đang dùng — khai thêm `org.jetbrains.kotlin.android`
+// ở đây là áp hai lần và Gradle sẽ báo xung đột phiên bản.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.vong.audio'
+version = '0.1.0'
+
+android {
+  namespace "app.vong.audio"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // `media3-exoplayer` cho ExoPlayer + `DataSource` tự viết; `media3-session` cho
+  // `MediaSessionService`/`MediaController` — thiếu nó thì không có nút trên màn hình khoá.
+  implementation "androidx.media3:media3-exoplayer:1.11.0"
+  implementation "androidx.media3:media3-session:1.11.0"
+}

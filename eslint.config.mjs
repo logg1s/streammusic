@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Rust sinh sẵn script glue của Tauri ở đây; không phải code của mình.
     "src-tauri/target/**",
+    // App React Native có bộ quy tắc riêng (`mobile/eslint.config.js`): quy tắc web ở
+    // đây bắt lỗi sai chỗ trong RN.
+    "mobile/**",
   ]),
 ]);
 

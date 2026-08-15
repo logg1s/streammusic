@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Manifest của thư viện cố tình để trống.
+
+  Quyền (FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK, WAKE_LOCK,
+  POST_NOTIFICATIONS) và thẻ <service> của `VongAudioService` do config plugin
+  (`app.plugin.js`) chèn vào manifest của app lúc prebuild. Khai lại ở đây thì thẻ
+  <service> xuất hiện hai lần với thuộc tính khác nhau và manifest merger sẽ báo lỗi.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

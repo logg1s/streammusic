@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Vọng",
+    "slug": "vong",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "vong",
+    "android": {
+      "package": "app.vong.mobile"
+    },
+    "ios": {
+      "bundleIdentifier": "app.vong.mobile",
+      "supportsTablet": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      "./modules/vong-audio/app.plugin.js",
+      "expo-splash-screen"
+    ],
+    "extra": {
+      "origin": "https://streammusic.vercel.app"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -50,3 +50,14 @@ next-env.d.ts
 # Rust / Tauri
 /src-tauri/target/
 /src-tauri/gen/schemas/
+
+# Expo / React Native (mobile)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/modules/*/android/build/
+mobile/*.jks
+
+# anh chup man hinh may ao
+.shots/
