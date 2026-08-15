@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { SkipForward } from "lucide-react";
+import { ListMusic, SkipForward } from "lucide-react";
 import { Cover } from "@/components/library/cover";
 import {
   IconButton,
@@ -13,6 +13,7 @@ import {
   VolumeControl,
 } from "@/components/player/controls";
 import { NowPlayingSheet } from "@/components/player/now-playing-sheet";
+import { QueuePanel } from "@/components/player/queue-panel";
 import { PROVIDER_LABEL } from "@/lib/provider-labels";
 import { shortCodec } from "@/lib/utils";
 import { useCurrentTrack, usePlayer } from "@/store/player";
@@ -21,7 +22,9 @@ export function PlayerBar() {
   const track = useCurrentTrack();
   const isPlaying = usePlayer((s) => s.isPlaying);
   const error = usePlayer((s) => s.error);
+  const hasQueue = usePlayer((s) => s.queue.length > 0);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
 
   return (
     <>
@@ -46,7 +49,17 @@ export function PlayerBar() {
             <TransportRow />
             <Scrubber className="max-w-xl" />
           </div>
-          <VolumeControl className="hidden md:flex md:w-[180px] md:justify-end" />
+          <div className="hidden items-center gap-1 md:flex md:w-[220px] md:justify-end">
+            <IconButton
+              label="Hàng đợi"
+              onClick={() => setQueueOpen(true)}
+              disabled={!hasQueue}
+              active={queueOpen}
+            >
+              <ListMusic className="size-4" />
+            </IconButton>
+            <VolumeControl />
+          </div>
 
           {/* Mobile: đủ nút để điều khiển ngay tại chỗ, không phải mở sheet. */}
           <div className="flex shrink-0 items-center gap-1 sm:hidden">
@@ -68,7 +81,16 @@ export function PlayerBar() {
         </span>
       </footer>
 
-      {sheetOpen && <NowPlayingSheet onClose={() => setSheetOpen(false)} />}
+      {sheetOpen && (
+        <NowPlayingSheet
+          onClose={() => setSheetOpen(false)}
+          onOpenQueue={() => {
+            setSheetOpen(false);
+            setQueueOpen(true);
+          }}
+        />
+      )}
+      {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
     </>
   );
 }

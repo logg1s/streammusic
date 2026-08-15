@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { PlayableTrack } from "@/lib/library";
 
 export type RepeatMode = "off" | "all" | "one";
@@ -12,8 +13,8 @@ export type RepeatMode = "off" | "all" | "one";
  * là lệnh trực tiếp lên phần tử DOM, còn state chỉ phản ánh những gì phần tử
  * báo lại qua sự kiện. Một chiều duy nhất, không có vòng lặp cập nhật.
  *
- * AudioEngine giữ hai thẻ và luân phiên chúng để đệm sẵn bài kế, nên giá trị này
- * đổi mỗi lần sang bài mới.
+ * AudioEngine giữ một hồ thẻ và đổi vai trò giữa chúng, nên giá trị này đổi mỗi
+ * lần sang bài mới.
  */
 let audioElement: HTMLAudioElement | null = null;
 
@@ -48,6 +49,12 @@ interface PlayerState {
   shuffle: boolean;
   repeat: RepeatMode;
   error: string | null;
+  /**
+   * Vị trí cần tua tới ngay khi bài nạp xong, dùng để khôi phục sau khi tải lại trang.
+   * AudioEngine tiêu thụ rồi xoá về null. Không thể tua ngay lúc khôi phục vì thẻ
+   * <audio> chưa có metadata nên `currentTime` sẽ bị bỏ qua.
+   */
+  pendingSeek: number | null;
 
   playQueue: (tracks: PlayableTrack[], startIndex?: number) => void;
   playTrackAt: (position: number) => void;
@@ -69,6 +76,7 @@ interface PlayerState {
   syncPlaying: (isPlaying: boolean) => void;
   setBuffering: (value: boolean) => void;
   setError: (message: string | null) => void;
+  consumePendingSeek: () => number | null;
 }
 
 function shuffledOrder(length: number, keepFirst: number): number[] {
@@ -82,7 +90,9 @@ function shuffledOrder(length: number, keepFirst: number): number[] {
   return keepFirst >= 0 ? [keepFirst, ...rest] : rest;
 }
 
-export const usePlayer = create<PlayerState>((set, get) => ({
+export const usePlayer = create<PlayerState>()(
+  persist(
+    (set, get) => ({
   queue: [],
   order: [],
   position: 0,
@@ -95,6 +105,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   shuffle: false,
   repeat: "off",
   error: null,
+  pendingSeek: null,
 
   playQueue(tracks, startIndex = 0) {
     if (tracks.length === 0) return;
@@ -239,7 +250,38 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   setError(error) {
     set({ error, isPlaying: false, isBuffering: false });
   },
-}));
+
+  consumePendingSeek() {
+    const value = get().pendingSeek;
+    if (value !== null) set({ pendingSeek: null });
+    return value;
+  },
+    }),
+    {
+      name: "vong-player",
+      // Chỉ lưu thứ đáng khôi phục. isPlaying cố tình không lưu: trình duyệt chặn
+      // tự phát khi chưa có tương tác, khôi phục nó sẽ luôn ném NotAllowedError.
+      partialize: (s) => ({
+        queue: s.queue,
+        order: s.order,
+        position: s.position,
+        volume: s.volume,
+        muted: s.muted,
+        shuffle: s.shuffle,
+        repeat: s.repeat,
+        currentTime: s.currentTime,
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // Mở lại trang thì đứng yên ở đúng chỗ cũ, chờ người dùng bấm phát.
+        state.isPlaying = false;
+        state.isBuffering = false;
+        state.error = null;
+        state.pendingSeek = state.currentTime > 1 ? state.currentTime : null;
+      },
+    },
+  ),
+);
 
 /** Bài đang phát, hoặc null nếu hàng đợi rỗng. */
 export function useCurrentTrack(): PlayableTrack | null {
@@ -284,6 +326,37 @@ export function peekPrevTrack(): PlayableTrack | null {
   if (position > 0) return queue[order[position - 1]] ?? null;
   if (repeat === "all") return queue[order[order.length - 1]] ?? null;
   return null;
+}
+
+/**
+ * Id các bài quanh bài đang nghe, xếp theo thứ tự ưu tiên: hiện tại, +1, −1, +2, −2…
+ *
+ * AudioEngine dùng làm "bộ cần giữ": thẻ nào đang ôm một trong các id này thì không
+ * được tái dùng. Thứ tự ưu tiên cũng chính là thứ tự hi sinh khi phải chọn thẻ —
+ * bỏ bài xa nhất trước.
+ */
+export function peekNeighbourIds(radius: number): string[] {
+  const { queue, order, position, repeat } = usePlayer.getState();
+  if (order.length === 0) return [];
+
+  const ids: string[] = [];
+  const push = (pos: number) => {
+    let p = pos;
+    if (repeat === "all") {
+      p = ((p % order.length) + order.length) % order.length;
+    } else if (p < 0 || p >= order.length) {
+      return;
+    }
+    const id = queue[order[p]]?.id;
+    if (id && !ids.includes(id)) ids.push(id);
+  };
+
+  push(position);
+  for (let d = 1; d <= radius; d++) {
+    push(position + d);
+    push(position - d);
+  }
+  return ids;
 }
 
 /** Bài này có đang được phát không — dùng để tô sáng dòng trong danh sách. */

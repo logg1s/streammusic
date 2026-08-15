@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import {
   peekCurrentTrack,
+  peekNeighbourIds,
   peekNextTrack,
-  peekPrevTrack,
   registerAudioElement,
   useCurrentTrack,
   usePlayer,
@@ -33,13 +33,38 @@ import {
 
 /** Nạp trước bài kế khi bài hiện tại đã qua ngần này. */
 const PRELOAD_AT = 0.7;
-const SLOT_COUNT = 3;
+
+/**
+ * Năm thẻ: đủ giữ bài hiện tại cùng ±2 bài quanh nó, nên bấm next/prev liên tục
+ * theo thứ tự thì hầu như lúc nào cũng gặp bài đã nằm sẵn trong hồ.
+ *
+ * Không nâng cao hơn nữa vì thư viện này toàn FLAC, trung bình 19 MB/bài — mỗi thẻ
+ * ôm sẵn vài MB đệm, bảy thẻ trở lên là nặng bộ nhớ trên điện thoại mà đổi lại
+ * chẳng được bao nhiêu.
+ */
+const SLOT_COUNT = 5;
+/** Bán kính bộ cần giữ: hiện tại, ±1, ±2. */
+const KEEP_RADIUS = 2;
+
+/**
+ * Hoãn việc nạp sẵn bài kế sau khi đổi bài.
+ *
+ * Bấm next liên tục 10 lần mà nạp ngay thì sinh 10 lượt tải cho những bài lướt qua,
+ * tốn băng thông Drive vô ích. Chờ người dùng dừng lại rồi mới nạp.
+ */
+const PREFETCH_DEBOUNCE_MS = 800;
 
 export function AudioEngine() {
-  /** Ba phần tử, gán qua callback ref. */
-  const els = useRef<(HTMLAudioElement | null)[]>([null, null, null]);
+  /** Các phần tử trong hồ, gán qua callback ref. */
+  const els = useRef<(HTMLAudioElement | null)[]>(
+    Array.from({ length: SLOT_COUNT }, () => null),
+  );
   /** Thẻ nào đang giữ bài nào. */
-  const holds = useRef<(string | null)[]>([null, null, null]);
+  const holds = useRef<(string | null)[]>(
+    Array.from({ length: SLOT_COUNT }, () => null),
+  );
+  /** Hẹn giờ hoãn việc nạp sẵn bài kế. */
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Chỉ số thẻ đang phát. Cập nhật đồng bộ trong reconcile nên không bao giờ cũ. */
   const currentSlot = useRef(-1);
 
@@ -53,19 +78,31 @@ export function AudioEngine() {
     els.current[index] = el;
   };
 
-  /** Chọn thẻ để tái dùng: không đụng vào thẻ đang giữ bài cần thiết. */
-  const pickVictim = useCallback((keep: (string | null)[]) => {
-    const keepSet = new Set(keep.filter((id): id is string => Boolean(id)));
-
+  /**
+   * Chọn thẻ để tái dùng. `keep` xếp theo thứ tự ưu tiên, nên khi buộc phải hi sinh
+   * một thẻ đang giữ bài cần thiết thì bỏ bài xa nhất trước.
+   */
+  const pickVictim = useCallback((keep: string[]) => {
     const empty = holds.current.findIndex((held) => held === null);
     if (empty !== -1) return empty;
 
+    const keepSet = new Set(keep);
     const spare = holds.current.findIndex((held) => !keepSet.has(held!));
     if (spare !== -1) return spare;
 
-    // Không xảy ra với 3 thẻ (bộ cần giữ nhiều nhất là 2 khi bài hiện tại chưa nằm
-    // trong hồ), nhưng vẫn cần một lối thoát xác định thay vì trả -1.
-    return holds.current.findIndex((_, i) => i !== currentSlot.current);
+    // Cả hồ đều đang giữ bài cần thiết: bỏ bài có ưu tiên thấp nhất, nhưng tuyệt
+    // đối không đụng vào thẻ đang phát.
+    let victim = -1;
+    let worst = -1;
+    holds.current.forEach((held, i) => {
+      if (i === currentSlot.current) return;
+      const rank = keep.indexOf(held!);
+      if (rank > worst) {
+        worst = rank;
+        victim = i;
+      }
+    });
+    return victim;
   }, []);
 
   /**
@@ -75,8 +112,7 @@ export function AudioEngine() {
   const reconcile = useCallback(() => {
     const state = usePlayer.getState();
     const currentId = peekCurrentTrack()?.id ?? null;
-    const nextId = peekNextTrack()?.id ?? null;
-    const prevId = peekPrevTrack()?.id ?? null;
+    const keep = peekNeighbourIds(KEEP_RADIUS);
 
     const previousSlot = currentSlot.current;
 
@@ -85,9 +121,13 @@ export function AudioEngine() {
     let freshlyLoaded = false;
 
     if (currentId && slot === -1) {
-      slot = pickVictim([currentId, nextId, prevId]);
-      const victim = els.current[slot];
+      slot = pickVictim(keep);
+      const victim = slot === -1 ? null : els.current[slot];
       if (victim) {
+        // Khi vừa khôi phục sau khi tải lại trang, người dùng chưa bấm gì và ta sắp
+        // tua tới giữa bài. Kéo sẵn 6MB từ đầu file lúc đó là phí — chỉ lấy metadata,
+        // phần dữ liệu thật sẽ tải từ đúng vị trí tua.
+        victim.preload = state.pendingSeek !== null ? "metadata" : "auto";
         victim.src = `/api/stream/${currentId}`;
         victim.load();
         holds.current[slot] = currentId;
@@ -151,16 +191,44 @@ export function AudioEngine() {
       .setBuffering(el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
   }, [pickVictim]);
 
+  /** Nạp sẵn bài kế nếu chưa nằm trong hồ. Không bao giờ đụng vào thẻ đang phát. */
+  const prefetchNext = useCallback(() => {
+    const nextId = peekNextTrack()?.id ?? null;
+    if (!nextId || holds.current.includes(nextId)) return;
+
+    const slot = pickVictim(peekNeighbourIds(KEEP_RADIUS));
+    if (slot === -1 || slot === currentSlot.current) return;
+
+    const el = els.current[slot];
+    if (!el || !el.paused) return;
+
+    el.preload = "auto";
+    el.src = `/api/stream/${nextId}`;
+    el.load();
+    holds.current[slot] = nextId;
+  }, [pickVictim]);
+
   // Effect DUY NHẤT điều khiển phát nhạc.
   useEffect(() => {
     reconcile();
   }, [trackId, isPlaying, reconcile]);
 
+  // Sau khi đổi bài và người dùng đã dừng lại, nạp sẵn bài kế. Hoãn để việc bấm
+  // next liên tục không sinh một loạt lượt tải cho các bài chỉ lướt qua.
+  useEffect(() => {
+    if (!trackId) return;
+    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = setTimeout(prefetchNext, PREFETCH_DEBOUNCE_MS);
+    return () => {
+      if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
+    };
+  }, [trackId, prefetchNext]);
+
   useEffect(() => {
     return () => registerAudioElement(null);
   }, []);
 
-  // Âm lượng áp cho cả ba thẻ, để thẻ đệm sẵn không phát to bất ngờ khi tới lượt.
+  // Âm lượng áp cho cả hồ, để thẻ đệm sẵn không phát to bất ngờ khi tới lượt.
   useEffect(() => {
     for (let i = 0; i < SLOT_COUNT; i++) {
       const el = els.current[i];
@@ -175,27 +243,9 @@ export function AudioEngine() {
     (currentTime: number, duration: number) => {
       if (!Number.isFinite(duration) || duration <= 0) return;
       if (currentTime / duration < PRELOAD_AT) return;
-
-      const nextId = peekNextTrack()?.id ?? null;
-      if (!nextId || holds.current.includes(nextId)) return;
-
-      const currentId = peekCurrentTrack()?.id ?? null;
-      const prevId = peekPrevTrack()?.id ?? null;
-      const slot = pickVictim([currentId, nextId, prevId]);
-
-      // Không bao giờ ghi đè lên thẻ đang phát. Bản trước giữ chỉ số thẻ rảnh trong
-      // closure, nên một sự kiện timeupdate bắn ngay sau khi đổi thẻ sẽ ghi `src` đè
-      // lên chính bài đang kêu.
-      if (slot === currentSlot.current) return;
-
-      const el = els.current[slot];
-      if (!el || !el.paused) return;
-
-      el.src = `/api/stream/${nextId}`;
-      el.load();
-      holds.current[slot] = nextId;
+      prefetchNext();
     },
-    [pickVictim],
+    [prefetchNext],
   );
 
   // Media Session: phím media trên bàn phím, tai nghe, và màn hình khoá điện thoại.
@@ -263,6 +313,14 @@ export function AudioEngine() {
     onLoadedMetadata: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       const el = e.currentTarget;
       if (!isCurrent(el)) return;
+
+      // Khôi phục sau khi tải lại trang: chỉ tua được khi đã có metadata, đặt
+      // currentTime sớm hơn thì trình duyệt bỏ qua.
+      const resume = usePlayer.getState().consumePendingSeek();
+      if (resume !== null && Number.isFinite(el.duration)) {
+        el.currentTime = Math.min(resume, Math.max(0, el.duration - 1));
+      }
+
       usePlayer.getState().syncTime(el.currentTime, el.duration);
     },
     onPlay: (e: React.SyntheticEvent<HTMLAudioElement>) => {

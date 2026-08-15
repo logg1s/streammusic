@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MobileHeader, MobileTabBar } from "@/components/mobile-nav";
 import { AudioEngine } from "@/components/player/audio-engine";
+import { KeyboardShortcuts } from "@/components/player/keyboard-shortcuts";
 import { PlayerBar } from "@/components/player/player-bar";
 import { auth } from "@/lib/auth";
 
@@ -41,6 +42,7 @@ export default async function AppLayout({
       <PlayerBar />
       <MobileTabBar />
       <AudioEngine />
+      <KeyboardShortcuts />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ListMusic } from "lucide-react";
 import { Cover } from "@/components/library/cover";
 import {
   Scrubber,
@@ -20,7 +20,13 @@ import { useCurrentTrack } from "@/store/player";
  * Trên mobile thanh phát chỉ đủ chỗ cho tên bài và nút play/pause, nên mọi thứ
  * còn lại (tua, xáo bài, lặp, âm lượng) nằm ở đây.
  */
-export function NowPlayingSheet({ onClose }: { onClose: () => void }) {
+export function NowPlayingSheet({
+  onClose,
+  onOpenQueue,
+}: {
+  onClose: () => void;
+  onOpenQueue: () => void;
+}) {
   const track = useCurrentTrack();
 
   // Đóng bằng phím Esc, và khoá cuộn nền phía sau.
@@ -51,7 +57,14 @@ export function NowPlayingSheet({ onClose }: { onClose: () => void }) {
           <ChevronDown className="size-5" />
         </button>
         <p className="eyebrow">Đang phát</p>
-        <span className="size-9" />
+        <button
+          type="button"
+          onClick={onOpenQueue}
+          aria-label="Hàng đợi"
+          className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+        >
+          <ListMusic className="size-5" />
+        </button>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col justify-center gap-8 px-6 pb-6">
