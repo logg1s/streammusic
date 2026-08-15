@@ -4,23 +4,19 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   peekCurrentTrack,
   peekNeighbourIds,
-  peekNextTrack,
   registerAudioElement,
   useCurrentTrack,
   usePlayer,
 } from "@/store/player";
 
 /**
- * Hồ ba thẻ <audio>, là toàn bộ phần phát nhạc của ứng dụng.
+ * Hồ thẻ <audio>, là toàn bộ phần phát nhạc của ứng dụng.
  *
  * Component này BẮT BUỘC nằm trong layout, không phải trong page: App Router giữ
  * nguyên layout khi điều hướng, nên các thẻ không bao giờ bị unmount và nhạc chạy
  * liên tục lúc người dùng chuyển từ trang album sang trang nghệ sĩ.
  *
- * Vì sao ba thẻ: một bài lấy từ Google Drive mất ~3 giây mới ra byte đầu tiên và đó
- * là trần cứng của Drive. Giữ sẵn bài trước + bài hiện tại + bài kế thì cả next lẫn
- * prev đều tức thì. Bài vừa phát xong vẫn còn nguyên trong thẻ cũ, nên "giữ sẵn prev"
- * chỉ là không tái dùng thẻ đó — không tốn thêm byte nào.
+ * Vì sao nhiều thẻ: một bài lấy từ Google Drive mất ~3 giây mới ra byte đầu tiên và đó`n * là trần cứng của Drive. Giữ sẵn ±2 bài quanh bài đang nghe thì next lẫn prev đều`n * gần như tức thì. Bài vừa phát xong vẫn còn nguyên trong thẻ cũ, nên "giữ sẵn prev"`n * chỉ là không tái dùng thẻ đó — không tốn thêm byte nào.
  *
  * ── BẤT BIẾN ─────────────────────────────────────────────────────────────────
  * Tại mọi thời điểm, NHIỀU NHẤT MỘT thẻ ở trạng thái không tạm dừng, và đó luôn là
@@ -47,12 +43,17 @@ const SLOT_COUNT = 5;
 const KEEP_RADIUS = 2;
 
 /**
- * Hoãn việc nạp sẵn bài kế sau khi đổi bài.
+ * Lịch nạp sẵn sau khi đổi bài, tính bằng ms.
  *
- * Bấm next liên tục 10 lần mà nạp ngay thì sinh 10 lượt tải cho những bài lướt qua,
- * tốn băng thông Drive vô ích. Chờ người dùng dừng lại rồi mới nạp.
+ * Mốc đầu hoãn một chút để bấm next liên tục không sinh một loạt lượt tải cho những
+ * bài chỉ lướt qua. Mốc sau nạp thêm bài thứ hai phía trước: Drive mất ~2,3 giây mới
+ * ra byte đầu, nên chỉ giữ sẵn một bài là không đủ khi người dùng bấm next đều đặn.
+ *
+ * Nghe tuần tự thì bài thứ hai không hề phí — trước sau gì cũng tới lượt nó.
  */
-const PREFETCH_DEBOUNCE_MS = 800;
+const PREFETCH_SCHEDULE_MS = [400, 3500];
+/** Nạp sẵn tối đa ngần này bài phía trước. */
+const PREFETCH_AHEAD = 2;
 
 export function AudioEngine() {
   /** Các phần tử trong hồ, gán qua callback ref. */
@@ -63,8 +64,6 @@ export function AudioEngine() {
   const holds = useRef<(string | null)[]>(
     Array.from({ length: SLOT_COUNT }, () => null),
   );
-  /** Hẹn giờ hoãn việc nạp sẵn bài kế. */
-  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Chỉ số thẻ đang phát. Cập nhật đồng bộ trong reconcile nên không bao giờ cũ. */
   const currentSlot = useRef(-1);
 
@@ -191,21 +190,34 @@ export function AudioEngine() {
       .setBuffering(el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
   }, [pickVictim]);
 
-  /** Nạp sẵn bài kế nếu chưa nằm trong hồ. Không bao giờ đụng vào thẻ đang phát. */
-  const prefetchNext = useCallback(() => {
-    const nextId = peekNextTrack()?.id ?? null;
-    if (!nextId || holds.current.includes(nextId)) return;
+  /**
+   * Nạp sẵn bài phía trước gần nhất mà chưa có trong hồ.
+   * Mỗi lần gọi chỉ nạp MỘT bài, để không mở nhiều kết nối tới Drive cùng lúc.
+   */
+  const prefetchAhead = useCallback(() => {
+    const { queue, order, position, repeat } = usePlayer.getState();
+    if (order.length === 0) return;
 
-    const slot = pickVictim(peekNeighbourIds(KEEP_RADIUS));
-    if (slot === -1 || slot === currentSlot.current) return;
+    for (let d = 1; d <= PREFETCH_AHEAD; d++) {
+      let p = position + d;
+      if (repeat === "all") p = p % order.length;
+      else if (p >= order.length) break;
 
-    const el = els.current[slot];
-    if (!el || !el.paused) return;
+      const id = queue[order[p]]?.id;
+      if (!id || holds.current.includes(id)) continue;
 
-    el.preload = "auto";
-    el.src = `/api/stream/${nextId}`;
-    el.load();
-    holds.current[slot] = nextId;
+      const slot = pickVictim(peekNeighbourIds(KEEP_RADIUS));
+      if (slot === -1 || slot === currentSlot.current) return;
+
+      const el = els.current[slot];
+      if (!el || !el.paused) return;
+
+      el.preload = "auto";
+      el.src = `/api/stream/${id}`;
+      el.load();
+      holds.current[slot] = id;
+      return;
+    }
   }, [pickVictim]);
 
   // Effect DUY NHẤT điều khiển phát nhạc.
@@ -213,16 +225,15 @@ export function AudioEngine() {
     reconcile();
   }, [trackId, isPlaying, reconcile]);
 
-  // Sau khi đổi bài và người dùng đã dừng lại, nạp sẵn bài kế. Hoãn để việc bấm
-  // next liên tục không sinh một loạt lượt tải cho các bài chỉ lướt qua.
+  // Sau khi đổi bài, nạp sẵn dần các bài phía trước theo lịch. Đổi bài lần nữa thì
+  // huỷ lịch cũ, nên bấm next liên tục không kéo về một loạt bài chỉ lướt qua.
   useEffect(() => {
     if (!trackId) return;
-    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
-    prefetchTimer.current = setTimeout(prefetchNext, PREFETCH_DEBOUNCE_MS);
-    return () => {
-      if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
-    };
-  }, [trackId, prefetchNext]);
+    const timers = PREFETCH_SCHEDULE_MS.map((delay) =>
+      setTimeout(prefetchAhead, delay),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [trackId, prefetchAhead]);
 
   useEffect(() => {
     return () => registerAudioElement(null);
@@ -243,9 +254,9 @@ export function AudioEngine() {
     (currentTime: number, duration: number) => {
       if (!Number.isFinite(duration) || duration <= 0) return;
       if (currentTime / duration < PRELOAD_AT) return;
-      prefetchNext();
+      prefetchAhead();
     },
-    [prefetchNext],
+    [prefetchAhead],
   );
 
   // Media Session: phím media trên bàn phím, tai nghe, và màn hình khoá điện thoại.
