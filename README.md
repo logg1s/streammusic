@@ -37,18 +37,41 @@ Mọi khác biệt giữa ba nhà cung cấp nằm gọn trong một interface d
 chuyện với interface đó — thêm S3 hay WebDAV sau này chỉ là viết thêm một file.
 
 ```
+packages/shared/      code dùng chung cho cả ba vỏ (web · Windows · Android)
 src/
   lib/providers/     types.ts · dropbox.ts · google-drive.ts · onedrive.ts
   lib/metadata.ts    đọc tag ID3 qua range request (chỉ tải 2–25% file)
   lib/scanner.ts     quét theo lô, ghi vào thư viện
   lib/connections.ts lưu + tự refresh OAuth token (mã hoá AES-256-GCM)
   app/api/stream/    endpoint phát nhạc: 302 hoặc proxy Range
+  app/api/native/    đăng nhập + cấp session JWT cho hai vỏ native
+  app/api/library/   endpoint JSON cho mobile (trang chủ, bài, album, nghệ sĩ, tìm)
   components/player/ audio engine + thanh phát (sống ở layout, không ở page)
+src-tauri/           vỏ Windows: nhạc phát bằng Rust (rodio + symphonia) + SMTC
+mobile/              app Expo (Android) + Expo Module `vong-audio` (androidx.media3)
 ```
 
 Thẻ `<audio>` nằm trong `src/app/(app)/layout.tsx`. App Router giữ nguyên layout
 khi điều hướng nên nhạc chạy liên tục lúc chuyển trang — nếu đặt trong page thì
 mỗi lần đổi trang là đứt nhạc.
+
+### Ba vỏ, một nguồn logic
+
+Trên web, khoá máy hoặc thu nhỏ cửa sổ là **mất tiếng** — iframe của YouTube không
+cho phát nền, và trình duyệt bóp cả thẻ `<audio>` khi tab bị ẩn. Đó là lý do có hai
+vỏ native, và cả hai đều **không nhúng lại UI mới**: chúng nạp đúng trang web đang
+chạy, chỉ thay phần phát nhạc bằng player của hệ điều hành.
+
+| | Phát nhạc | Điều khiển ngoài app |
+| --- | --- | --- |
+| Web | `<audio>` + iframe YouTube | `mediaSession` (chỉ khi tab còn sống) |
+| Windows (`src-tauri/`) | Rust: `rodio` + `symphonia` | SMTC (thanh media của Windows) |
+| Android (`mobile/`) | Kotlin: `androidx.media3` | `MediaSession` + notification |
+
+`packages/shared/` giữ những gì cả ba đều cần: store hàng đợi (zustand), client
+radio, và `player-request.ts` — chỗ xin URL audio của YouTube. URL đó **phải** xin
+từ máy người dùng: YouTube trả `LOGIN_REQUIRED` cho IP máy chủ Vercel, nên mỗi vỏ
+tự gọi InnerTube bằng đường mạng của mình.
 
 ---
 
@@ -212,12 +235,23 @@ sang Vercel Blob rồi phục vụ qua CDN.
 ```bash
 npm run dev         # máy chủ phát triển
 npm run build       # build production
-npm run typecheck   # tsc --noEmit
+npm run typecheck   # tsc --noEmit (cả web và packages/shared)
+npm run check:youtube  # xin URL audio YouTube từ máy này rồi đo tốc độ tải thật
+npm run tauri:dev   # app Windows (cần máy chủ phát triển đang chạy)
+npm run tauri:build # đóng gói .exe + bộ cài NSIS
 npm run db:push     # đồng bộ schema vào Postgres
 npm run db:studio   # xem dữ liệu bằng Drizzle Studio
 npm run db:index    # tạo extension + index tìm kiếm (chạy một lần sau db:push)
 npm run verify      # kiểm chứng mã hoá token + đọc tag qua range request
 npm run seed:demo   # nạp 8 bài nhạc công khai để thử thư viện + player khi chưa có OAuth
+```
+
+App Android nằm trong workspace riêng:
+
+```bash
+cd mobile
+npx expo run:android   # build + cài development build (cần JDK 17 + Android SDK 36)
+npm start              # Metro cho development build đã cài
 ```
 
 `npm run verify` không cần database hay OAuth. Nó tải tag của vài file nhạc công

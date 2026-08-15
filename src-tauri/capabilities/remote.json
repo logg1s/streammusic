@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "vong-remote",
+  "description": "Cho trang web của Vọng (chạy trên origin thật) gọi player Rust.",
+  "windows": ["main"],
+  "local": true,
+  "remote": {
+    "urls": ["https://streammusic.vercel.app/*", "http://localhost:3000/*"]
+  },
+  "platforms": ["windows"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://www.youtube.com/*" }]
+    },
+    "allow-play-track",
+    "allow-pause",
+    "allow-resume",
+    "allow-seek",
+    "allow-set-volume"
+  ]
+}

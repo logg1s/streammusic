@@ -46,3 +46,7 @@ next-env.d.ts
 # ảnh chụp màn hình do công cụ kiểm thử sinh ra
 .playwright-mcp/
 /*.png
+
+# Rust / Tauri
+/src-tauri/target/
+/src-tauri/gen/schemas/

@@ -1,0 +1,49 @@
+[package]
+name = "vong"
+version = "0.1.0"
+description = "Vọng — nghe nhạc, phát nền thật trên Windows"
+edition = "2021"
+rust-version = "1.95"
+
+[lib]
+name = "vong_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = [] }
+tauri-plugin-deep-link = "2.4.9"
+tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
+# `unsafe-headers`: không có nó, plugin TỰ THÊM `Origin: <origin trang>` vào mọi request
+# và InnerTube trả 403 vì đúng header đó (đo 2026-08-15: bỏ Origin thì `200`, thêm vào
+# thì `403`, user-agent không ảnh hưởng). Bật lên thì JS gửi `origin: ""` để plugin xoá
+# hẳn header — giống hệt `fetch` của Node phía server.
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
+tauri-plugin-opener = "2"
+# `mp4` = symphonia-isomp4 + symphonia-aac: đúng bộ giải itag 140 (AAC-LC trong MP4).
+# Bỏ default-features để khỏi kéo cả mp3/flac/vorbis — nhạc thư viện cũng đi qua đây,
+# nên giữ thêm `flac`, `mp3`, `vorbis` cho file người dùng tự tải lên.
+rodio = { version = "0.22.2", default-features = false, features = [
+  "playback",
+  "mp4",
+  "flac",
+  "mp3",
+  "vorbis",
+] }
+# Rule của repo: dùng parking_lot khi lock được unwrap ngay — guard trả thẳng, không có
+# nhánh poisoning để phải unwrap.
+parking_lot = "0.12"
+ureq = "3.4"
+souvlaki = "0.8.3"
+serde = { version = "1", features = ["derive"] }
+# `tauri::generate_context!` sinh code gọi thẳng `serde_json` trong crate này.
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

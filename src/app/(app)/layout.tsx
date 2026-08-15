@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MobileHeader, MobileTabBar } from "@/components/mobile-nav";
-import { AudioEngine } from "@/components/player/audio-engine";
 import { KeyboardShortcuts } from "@/components/player/keyboard-shortcuts";
+import { PlaybackEngines } from "@/components/player/playback-engines";
 import { PlayerBar } from "@/components/player/player-bar";
 import { RadioConfigProvider } from "@/components/player/radio-context";
 import { RadioController } from "@/components/player/radio-controller";
-import { YouTubeEngine } from "@/components/player/youtube-engine";
 import { auth } from "@/lib/auth";
 import { getYoutubeAccount } from "@/lib/youtube/account";
 
@@ -55,10 +54,7 @@ export default async function AppLayout({
 
         <PlayerBar />
         <MobileTabBar />
-        <AudioEngine />
-        {/* Iframe luôn mount: bài YouTube phát bằng IFrame Player API, và player
-            được dựng sẵn từ đầu phiên để cú bấm đầu tiên ra tiếng ngay. */}
-        <YouTubeEngine />
+        <PlaybackEngines />
         <KeyboardShortcuts />
         <RadioController />
       </div>

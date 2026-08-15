@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Rust sinh sẵn script glue của Tauri ở đây; không phải code của mình.
+    "src-tauri/target/**",
   ]),
 ]);
 

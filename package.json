@@ -2,7 +2,10 @@
   "name": "streammusic",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["packages/*", "mobile"],
+  "workspaces": [
+    "packages/*",
+    "mobile"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,6 +13,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit && tsc -p packages/shared/tsconfig.json",
     "check:youtube": "tsx scripts/check-player-request.mts",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
@@ -21,6 +27,9 @@
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
     "@neondatabase/serverless": "^1.1.0",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-http": "^2.5.9",
+    "@tauri-apps/plugin-opener": "^2.5.4",
     "@tokenizer/range": "^0.13.1",
     "@vercel/blob": "^2.8.0",
     "@vong/shared": "*",
@@ -40,6 +49,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

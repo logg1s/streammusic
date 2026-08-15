@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { LoginButton } from "@/components/auth/login-button";
 import { auth, signIn } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -28,20 +29,14 @@ export default async function LoginPage() {
           về máy, không tải lên đâu cả — file vẫn nằm trong kho của bạn.
         </p>
 
-        <form
-          action={async () => {
-            "use server";
-            await signIn("google", { redirectTo: "/" });
-          }}
-          className="mt-10"
-        >
-          <button
-            type="submit"
-            className="w-full rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-foreground transition-transform hover:scale-[1.02]"
-          >
-            Đăng nhập bằng Google
-          </button>
-        </form>
+        <div className="mt-10">
+          <LoginButton
+            signInWithGoogle={async () => {
+              "use server";
+              await signIn("google", { redirectTo: "/" });
+            }}
+          />
+        </div>
 
         <p className="mt-6 text-xs leading-relaxed text-subtle">
           Đăng nhập chỉ để nhận diện bạn. Quyền đọc file là một bước riêng, cấp

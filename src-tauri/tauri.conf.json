@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Vong",
+  "version": "0.1.0",
+  "identifier": "app.vong.desktop",
+  "build": {
+    "frontendDist": "https://streammusic.vercel.app",
+    "devUrl": "http://localhost:3000"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Vọng",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 420,
+        "minHeight": 560
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["vong"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"]
+  }
+}
