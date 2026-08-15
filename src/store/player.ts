@@ -78,11 +78,6 @@ export interface PlayerState {
   pendingSeek: number | null;
   /** Radio đang chạy trên hàng đợi này; null khi hàng đợi là album/playlist thường. */
   radio: RadioState | null;
-  /**
-   * Proxy audio thất bại (YouTube chặn, video không phát được) → mount YouTubeEngine
-   * để phát bằng iframe. Không lưu vào storage: mỗi lần mở lại nên thử đường tốt trước.
-   */
-  ytFallback: boolean;
 
   playQueue: (tracks: PlayableTrack[], startIndex?: number) => void;
   playTrackAt: (position: number) => void;
@@ -118,7 +113,6 @@ export interface PlayerState {
   syncPlaying: (isPlaying: boolean) => void;
   setBuffering: (value: boolean) => void;
   setError: (message: string | null) => void;
-  setYtFallback: (on: boolean) => void;
   consumePendingSeek: () => number | null;
 }
 
@@ -150,7 +144,6 @@ export const usePlayer = create<PlayerState>()(
       error: null,
       pendingSeek: null,
       radio: null,
-      ytFallback: false,
 
       playQueue(tracks, startIndex = 0) {
         if (tracks.length === 0) return;
@@ -166,7 +159,6 @@ export const usePlayer = create<PlayerState>()(
           duration: 0,
           error: null,
           isPlaying: true,
-          ytFallback: false,
           // Mở một album là kết thúc radio: hàng đợi mới không còn liên quan tới seed cũ.
           radio: null,
         });
@@ -181,8 +173,6 @@ export const usePlayer = create<PlayerState>()(
           duration: 0,
           error: null,
           isPlaying: true,
-          // Bài mới thì thử lại đường proxy, đừng kéo iframe theo suốt phiên.
-          ytFallback: false,
         });
       },
 
@@ -426,10 +416,6 @@ export const usePlayer = create<PlayerState>()(
 
       setError(error) {
         set({ error, isPlaying: false, isBuffering: false });
-      },
-
-      setYtFallback(on) {
-        set({ ytFallback: on });
       },
 
       consumePendingSeek() {

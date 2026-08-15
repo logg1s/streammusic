@@ -10,24 +10,37 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Engine phát bài YouTube, song song với hồ <audio> của AudioEngine.
+ * Engine phát bài YouTube: mọi bài YouTube đều ra tiếng ở đây.
  *
  * Dùng IFrame Player API chính thức: video phát trong một iframe nhìn thấy được,
- * đúng điều khoản của YouTube (không bóc luồng, không giấu player 1×1).
+ * đúng điều khoản của YouTube (không bóc luồng, không giấu player 1×1). Máy chủ
+ * Vercel bị YouTube trả `LOGIN_REQUIRED` ở `/youtubei/v1/player` nên web không có
+ * đường tải byte nào khác — cái giá phải trả là mất phát nền, và đó là lý do có
+ * hai vỏ native (Windows/Android) trong repo này.
  *
  * Component này BẮT BUỘC nằm trong layout cùng AudioEngine. Iframe bị unmount hoặc
  * bị chuyển sang node cha khác là mất phiên phát, nên node DOM chứa player luôn được
  * render — lúc không có video chỉ thêm class `hidden`.
  *
  * ── BẤT BIẾN ─────────────────────────────────────────────────────────────────
- * Không có bài YouTube nào đang phát thì iframe phải im. AudioEngine ép phía kia:
- * gặp bài YouTube nó tạm dừng cả hồ thẻ. Hai chiều cộng lại giữ đúng một nguồn tiếng.
+ * Player được dựng NGAY khi mount, không chờ có bài YouTube. Chờ tới lúc bấm mới
+ * dựng thì cú bấm đầu phải gánh cả tải `iframe_api` + dựng iframe + buffer (đo được
+ * 1–3 giây). Không có bài YouTube nào đang phát thì iframe phải im; AudioEngine ép
+ * phía kia: gặp bài YouTube nó tạm dừng cả hồ thẻ.
  */
 
 /** YT không bắn timeupdate — muốn scrubber chạy thì phải tự hỏi getCurrentTime(). */
 const POLL_MS = 400;
 /** Sau playVideo() mà player vẫn chưa chạy trong ngần này thì coi như bị chặn tự phát. */
 const AUTOPLAY_CHECK_MS = 1500;
+/**
+ * Quãng bỏ qua PAUSED/ENDED sau một lệnh nạp bài.
+ *
+ * Đo được: `loadVideoById` trên player đang phát bắn PAUSED trước UNSTARTED của bài
+ * mới, và BUFFERING tới sau đó ~60 ms. 4 giây là dư cho cả mạng chậm mà vẫn ngắn hơn
+ * mọi khoảng người dùng kịp bấm tạm dừng trong iframe.
+ */
+const LOAD_GATE_MS = 4000;
 
 const YT_STATE = {
   UNSTARTED: -1,
@@ -70,24 +83,43 @@ export function YouTubeEngine() {
   const volume = usePlayer((s) => s.volume);
   const muted = usePlayer((s) => s.muted);
 
+  /**
+   * Id đang nằm trong player. Cần vì effect đổi bài chạy lại cả khi `ready` bật —
+   * không có nó thì bài vừa nạp trong `onReady` bị nạp lần hai và mất chỗ đang nghe.
+   */
+  const loadedRef = useRef<string | null>(null);
+  /**
+   * Đang nạp bài mới, chưa nghe player báo PLAYING/CUED cho nó.
+   *
+   * BẮT BUỘC phải có: `loadVideoById` trên player đang phát bắn PAUSED (đo được:
+   * `onStateChange` 2 ngay trước UNSTARTED của bài mới). Không chặn thì store tưởng
+   * người dùng bấm tạm dừng → `isPlaying` false → effect dưới gọi `pauseVideo()` và
+   * bài mới đứng im vĩnh viễn. ENDED của bài cũ cũng phải chặn, nếu không nó nhảy
+   * thêm một bài.
+   */
+  const loadingRef = useRef(false);
+  /** Lưới an toàn: nạp hỏng không bao giờ báo gì thì cũng phải mở lại cổng. */
+  const loadGuardRef = useRef(0);
+
+  /** Ghi nhận đã ra lệnh nạp: mọi PAUSED/ENDED trong quãng này là của bài cũ. */
+  const beginLoad = (id: string) => {
+    loadedRef.current = id;
+    loadingRef.current = true;
+    clearTimeout(loadGuardRef.current);
+    loadGuardRef.current = window.setTimeout(() => {
+      loadingRef.current = false;
+    }, LOAD_GATE_MS);
+  };
+
+  /** Player đã thật sự nhận bài mới — mở lại cổng cho PAUSED/ENDED. */
+  const endLoad = () => {
+    loadingRef.current = false;
+    clearTimeout(loadGuardRef.current);
+  };
+
+  // Dựng player một lần duy nhất, KHÔNG chờ có bài YouTube: cú bấm đầu tiên không
+  // phải gánh tải `iframe_api` + dựng iframe nữa.
   useEffect(() => {
-    if (!videoId) {
-      if (ready) playerRef.current?.pauseVideo();
-      registerSink("youtube", null);
-      return;
-    }
-
-    if (playerRef.current) {
-      // Chưa ready thì thôi: effect này chạy lại ngay khi `ready` bật, lúc đó
-      // `videoId` mới nhất sẽ được nạp.
-      if (!ready) return;
-      // cueVideoById nạp mà không phát, nên đổi bài lúc đang tạm dừng không tự bật tiếng.
-      if (usePlayer.getState().isPlaying)
-        playerRef.current.loadVideoById(videoId);
-      else playerRef.current.cueVideoById(videoId);
-      return;
-    }
-
     let cancelled = false;
 
     void loadYoutubeApi().then(() => {
@@ -95,7 +127,6 @@ export function YouTubeEngine() {
       if (cancelled || playerRef.current || !host || !window.YT?.Player) return;
 
       playerRef.current = new window.YT.Player(host, {
-        videoId,
         playerVars: {
           autoplay: 0,
           controls: 1,
@@ -108,6 +139,8 @@ export function YouTubeEngine() {
         },
         events: {
           onReady: (e) => {
+            // Sink của nguồn "youtube" đăng ký một lần cho cả phiên: store chỉ tra nó
+            // khi bài hiện tại là bài YouTube, nên không đụng gì tới hồ <audio>.
             registerSink("youtube", {
               seek: (seconds) => playerRef.current?.seekTo(seconds, true),
             });
@@ -115,9 +148,25 @@ export function YouTubeEngine() {
             e.target.setVolume(Math.round(state.volume * 100));
             if (state.muted) e.target.mute();
             else e.target.unMute();
-            // Engine này chỉ mount khi proxy audio đã hỏng giữa bài — vào đúng chỗ
-            // đang nghe thay vì phát lại từ đầu.
-            if (state.currentTime > 1) e.target.seekTo(state.currentTime, true);
+
+            // Hàng đợi có thể đã có bài YouTube trước khi player dựng xong (khôi phục
+            // sau khi tải lại trang, hoặc người dùng bấm trong lúc script còn tải).
+            // Nạp ngay tại đây: effect đổi bài ở dưới thấy `loadedRef` khớp nên không
+            // nạp lại.
+            const current = peekCurrentTrack();
+            const videoId =
+              current?.source === "youtube" ? current.youtubeVideoId : null;
+            if (videoId) {
+              // Tiêu thụ luôn `pendingSeek`: để lại thì bài thư viện phát sau đó sẽ
+              // bị tua tới vị trí của bài này.
+              const pending = state.consumePendingSeek();
+              const startSeconds =
+                pending ?? (state.currentTime > 1 ? state.currentTime : 0);
+              beginLoad(videoId);
+              if (state.isPlaying)
+                e.target.loadVideoById({ videoId, startSeconds });
+              else e.target.cueVideoById({ videoId, startSeconds });
+            }
             setReady(true);
           },
           onStateChange: (e) => {
@@ -131,13 +180,21 @@ export function YouTubeEngine() {
                 player.setBuffering(true);
                 break;
               case YT_STATE.PLAYING:
+                endLoad();
                 player.setBuffering(false);
                 player.syncPlaying(true);
                 break;
+              case YT_STATE.CUED:
+                endLoad();
+                break;
               case YT_STATE.PAUSED:
+                // PAUSED của bài CŨ, bắn ra vì `loadVideoById` vừa dỡ nó. Nghe theo là
+                // tắt luôn ý định phát của bài mới.
+                if (loadingRef.current) break;
                 player.syncPlaying(false);
                 break;
               case YT_STATE.ENDED:
+                if (loadingRef.current) break;
                 player.handleEnded();
                 break;
               default:
@@ -145,6 +202,7 @@ export function YouTubeEngine() {
             }
           },
           onError: () => {
+            endLoad();
             // 2/5/100/101/150: id hỏng, video bị gỡ, hoặc chủ kênh chặn nhúng. Ghi lại
             // để lô sau không gặp lại nữa rồi đi tiếp — KHÔNG gọi setError, vì nó tắt
             // isPlaying và radio sẽ đứng im giữa chừng.
@@ -169,6 +227,24 @@ export function YouTubeEngine() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Đổi bài. Chỉ ra lệnh, không bao giờ destroy player — iframe mất là mất phiên phát.
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!ready || !player) return;
+
+    if (!videoId) {
+      // Sang bài thư viện: nhả tiếng cho hồ <audio>.
+      if (loadedRef.current !== null) player.pauseVideo();
+      return;
+    }
+
+    if (loadedRef.current === videoId) return;
+    beginLoad(videoId);
+    // cueVideoById nạp mà không phát, nên đổi bài lúc đang tạm dừng không tự bật tiếng.
+    if (usePlayer.getState().isPlaying) player.loadVideoById(videoId);
+    else player.cueVideoById(videoId);
   }, [videoId, ready]);
 
   useEffect(() => {
@@ -220,6 +296,7 @@ export function YouTubeEngine() {
 
   useEffect(() => {
     return () => {
+      clearTimeout(loadGuardRef.current);
       registerSink("youtube", null);
       playerRef.current?.destroy();
       playerRef.current = null;
@@ -250,12 +327,6 @@ export function YouTubeEngine() {
       <div className="aspect-video w-full">
         <div ref={hostRef} className="size-full" />
       </div>
-      {/* Khung này chỉ hiện khi đường tải trực tiếp bị chặn, nên nói luôn cái giá
-          phải trả: iframe cross-origin không phát nền khi khoá máy được. */}
-      <p className="px-2.5 pb-2 pt-1.5 text-[11px] leading-snug text-subtle">
-        YouTube chặn máy chủ tải trực tiếp bài này, nên đang phát bằng player
-        nhúng — khoá máy là nhạc dừng.
-      </p>
     </div>
   );
 }

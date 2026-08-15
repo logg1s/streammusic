@@ -31,8 +31,6 @@ export interface PlayableTrack {
   id: string;
   source: TrackSource;
   youtubeVideoId: string | null;
-  /** Bài YouTube: URL proxy audio. Bài thư viện: null (dùng `/api/stream/<id>`). */
-  audioUrl: string | null;
   title: string;
   artistId: string | null;
   artistName: string | null;
@@ -67,7 +65,6 @@ export const trackColumns = {
   id: tracks.id,
   source: sql<TrackSource>`'library'::text`,
   youtubeVideoId: sql<string | null>`null::text`,
-  audioUrl: sql<string | null>`null::text`,
   title: tracks.title,
   artistId: tracks.artistId,
   artistName: sql<

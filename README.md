@@ -138,35 +138,35 @@ YouTube là nguồn nhạc chính thức của app, ngang hàng với kho lưu t
 
 ### Nguồn audio
 
-Bài YouTube **không** phát bằng iframe nữa. Server lấy URL audio thật qua
-[`youtubei.js`](https://github.com/LuanRT/YouTube.js) (client `VISIONOS`, ngã dự
-phòng `ANDROID_VR`), rồi `/api/youtube/audio/<videoId>` chuẩn hoá byte-range để thẻ
-`<audio>` của chính app đọc. Nhờ vậy mới **phát nền được trên điện thoại** (xem mục
-dưới) — media trong iframe cross-origin thì không điều khiển được.
+Bài YouTube phát bằng **IFrame Player API** chính thức: một iframe nhìn thấy được,
+cắm sẵn từ lúc mở app nên cú bấm đầu tiên ra tiếng ngay (không phải chờ tải
+`iframe_api` rồi dựng iframe). Web **không** tự tải byte audio nữa.
 
-Ba điều phải biết:
+Vì sao không còn đường proxy: `POST /youtubei/v1/player` trả `LOGIN_REQUIRED` cho IP
+máy chủ Vercel (đo 2026-08, 3/3 video) — chỉ máy người dùng, với IP dân dụng, resolve
+được. Cộng thêm AUP của Vercel cấm proxy/host media. Nên byte audio chỉ có thể do
+chính thiết bị của người dùng lấy.
 
-- Đây là **API nội bộ của YouTube**, không phải API công khai: nó có thể vỡ bất cứ
-  lúc nào. Đo được 2026-08: `ANDROID_VR` đã bị siết, URL của nó chỉ phục vụ 1 MiB
-  đầu rồi trả `403`; `VISIONOS` vẫn phục vụ hết bài. Thứ tự client nằm ở
-  `CLIENTS` trong `src/lib/youtube/resolve.ts` — client nào hỏng thì đổi chỗ.
-  Hỏng hết thì player tự lùi về iframe (`YoutubeFallbackGate`), vẫn nghe được nhưng
-  mất phát nền.
-- googlevideo trả `403` cho range mở (`bytes=0-`) và cho range phủ đúng cả file, nên
-  proxy luôn hỏi từng lô ≤ 1 MiB rồi nối lại. Đừng "tối ưu" bằng cách hỏi cả file.
-- **Byte không được đi qua Vercel**: AUP cấm proxy/host media, và Vercel tính tiền
-  hai lần. Deploy thì đặt `YT_AUDIO_ORIGIN` trỏ sang VPS tự host (một droplet
-  $4/tháng, 500 GiB egress ≈ 10.000 giờ nghe audio-only).
+Cái giá: iframe cross-origin **không phát nền được** khi khoá máy hoặc thu nhỏ cửa
+sổ. Đó là lý do có hai vỏ native trong repo này — cả hai tự resolve trên máy rồi tự
+giải mã:
 
-### Phát nền trên điện thoại
+| Vỏ | Phát bằng | Điều khiển ngoài app |
+| --- | --- | --- |
+| Windows (`src-tauri/`) | Rust: `rodio` + `symphonia` | SMTC |
+| Android (`mobile/`) | Kotlin: `androidx.media3` | MediaSession + màn hình khoá |
 
-- **Android (Chrome)**: chạy được ngay, kể cả khi khoá máy — Chromium chỉ tạm dừng
-  media ẩn khi media đó **có video**, còn đây là audio thuần.
-- **iOS (Safari)**: phải **Thêm vào Màn hình chính** rồi mở từ icon đó. Web app
-  standalone mới được phát nền (từ iOS 15.4); mở trong tab Safari thì khoá máy là
-  nhạc dừng.
+Điểm chung của cả hai, và là ràng buộc cứng: **googlevideo trả `403` khi request
+không có header `Range`, hoặc khi `Range` phủ quá 1 MiB.** ExoPlayer và AVURLAsset
+đều không gửi `Range` ở request đầu (`HttpUtil.buildRangeRequestHeader` trả `null`
+khi `position == 0 && length == C.LENGTH_UNSET`), nên không player sẵn có nào nạp
+thẳng URL googlevideo được — cả hai vỏ phải tự viết reader cắt lô ≤ 1 MiB.
 
-Điều khiển trên màn hình khoá / tai nghe dùng Media Session API, có cả thanh tua.
+`InnerTube` (`src/lib/youtube/resolve.ts`) phía server giờ **chỉ** còn dùng cho tìm
+kiếm, automix và hàng gợi ý trang chủ — những thứ chỉ đọc metadata.
+
+Điều khiển trên màn hình khoá / tai nghe của web dùng Media Session API, có cả thanh
+tua — nhưng chỉ cho bài thư viện.
 
 ### Tài khoản & khoá API
 
@@ -184,9 +184,9 @@ không cần credential và không tốn quota):
    playlist dự phòng khi automix quá mỏng. Không có key thì mục đó tự ẩn.
 3. **`YT_MUSIC_COOKIE`** (tuỳ chọn): cá nhân hoá hàng gợi ý trang chủ. Dùng **tài
    khoản phụ** — export cookie từ cửa sổ ẩn danh rồi đóng vĩnh viễn cửa sổ đó, và
-   biết rằng YouTube có thể khoá tài khoản dùng theo cách này. Đường phát nhạc
-   **không bao giờ** nhận cookie này (gắn cookie sẽ đẩy resolve sang `web`, kéo theo
-   DRM/SABR/PO token).
+   biết rằng YouTube có thể khoá tài khoản dùng theo cách này. Phiên InnerTube dùng
+   chung **không bao giờ** nhận cookie này (gắn cookie sẽ đẩy phiên sang `web`, kéo
+   theo DRM/SABR/PO token).
 
 **Quota**: `search.list` của Data API còn 100 lần/ngày mỗi project, nhưng app gần như
 không dùng nữa — tìm kiếm và automix đi qua InnerTube. Một lần đồng bộ gu nhạc ≈ 20
@@ -196,15 +196,14 @@ unit. Quota tính cho project của credential thực gửi đi.
 
 ## Chi phí băng thông
 
-| Nguồn             | Byte đi qua Vercel                               |
-| ----------------- | ------------------------------------------------ |
-| Dropbox, OneDrive | ~0 (302 redirect)                                |
-| Google Drive      | toàn bộ — khoảng 60–100 MB cho mỗi giờ nghe      |
-| YouTube           | ~50 MB/giờ — **phải** dời sang `YT_AUDIO_ORIGIN` |
+| Nguồn             | Byte đi qua Vercel                          |
+| ----------------- | ------------------------------------------- |
+| Dropbox, OneDrive | ~0 (302 redirect)                           |
+| Google Drive      | toàn bộ — khoảng 60–100 MB cho mỗi giờ nghe |
+| YouTube           | ~0 — byte đi thẳng từ googlevideo tới thiết bị |
 
 Nếu Drive trở nên tốn kém, bước nâng cấp tiếp theo là cache những bài nghe nhiều
-sang Vercel Blob rồi phục vụ qua CDN. Nhánh YouTube thì không có lựa chọn: AUP của
-Vercel cấm proxy media, nên byte audio phải nằm trên VPS riêng.
+sang Vercel Blob rồi phục vụ qua CDN.
 
 ---
 

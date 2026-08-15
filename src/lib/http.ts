@@ -6,10 +6,6 @@ import {
   YoutubeQuotaError,
 } from "@/lib/youtube/api";
 import { YoutubeReauthError } from "@/lib/youtube/account";
-import {
-  VideoUnplayableError,
-  YoutubeBlockedError,
-} from "@/lib/youtube/errors";
 
 /**
  * Origin công khai của app, dùng để dựng redirect_uri của OAuth.
@@ -77,12 +73,6 @@ export function toErrorResponse(error: unknown): Response {
       { error: error.message, code: "YOUTUBE_REAUTH" },
       { status: 409 },
     );
-  }
-  if (error instanceof YoutubeBlockedError) {
-    return jsonError("YouTube tạm chặn — chuyển sang player nhúng", 503);
-  }
-  if (error instanceof VideoUnplayableError) {
-    return jsonError("Video này không phát được", 422);
   }
   if (error instanceof YoutubeApiError) {
     // Thân lỗi của Google có key, id video, chi tiết nội bộ — chỉ ghi log, không trả ra.

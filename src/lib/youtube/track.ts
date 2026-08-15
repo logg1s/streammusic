@@ -26,9 +26,6 @@ export function toPlayableTrack(row: {
     id: youtubeTrackId(row.videoId),
     source: "youtube",
     youtubeVideoId: row.videoId,
-    // YT_AUDIO_ORIGIN rỗng = cùng origin (dev, self-host). Trên Vercel phải trỏ sang
-    // VPS: AUP của Vercel cấm proxy/host media, và mỗi byte còn bị tính hai lần.
-    audioUrl: `${process.env.YT_AUDIO_ORIGIN ?? ""}/api/youtube/audio/${row.videoId}`,
     title: row.title,
     artistId: null,
     artistName: row.artistName ?? row.channelTitle,

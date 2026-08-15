@@ -9,9 +9,15 @@
  */
 
 declare namespace YT {
+  /** Dạng đối tượng là cách duy nhất truyền `startSeconds` (khôi phục chỗ đang nghe). */
+  interface LoadVideoArgs {
+    videoId: string;
+    startSeconds?: number;
+  }
+
   interface Player {
-    loadVideoById(id: string): void;
-    cueVideoById(id: string): void;
+    loadVideoById(id: string | LoadVideoArgs): void;
+    cueVideoById(id: string | LoadVideoArgs): void;
     playVideo(): void;
     pauseVideo(): void;
     seekTo(seconds: number, allowSeekAhead: boolean): void;

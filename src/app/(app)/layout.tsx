@@ -6,7 +6,7 @@ import { KeyboardShortcuts } from "@/components/player/keyboard-shortcuts";
 import { PlayerBar } from "@/components/player/player-bar";
 import { RadioConfigProvider } from "@/components/player/radio-context";
 import { RadioController } from "@/components/player/radio-controller";
-import { YoutubeFallbackGate } from "@/components/player/youtube-fallback-gate";
+import { YouTubeEngine } from "@/components/player/youtube-engine";
 import { auth } from "@/lib/auth";
 import { getYoutubeAccount } from "@/lib/youtube/account";
 
@@ -56,8 +56,9 @@ export default async function AppLayout({
         <PlayerBar />
         <MobileTabBar />
         <AudioEngine />
-        {/* Iframe chỉ mount khi proxy audio thất bại — xem YoutubeFallbackGate. */}
-        <YoutubeFallbackGate />
+        {/* Iframe luôn mount: bài YouTube phát bằng IFrame Player API, và player
+            được dựng sẵn từ đầu phiên để cú bấm đầu tiên ra tiếng ngay. */}
+        <YouTubeEngine />
         <KeyboardShortcuts />
         <RadioController />
       </div>
