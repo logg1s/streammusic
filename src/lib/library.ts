@@ -168,6 +168,57 @@ export async function getRecentlyPlayed(
   return out;
 }
 
+/** Quét ngần này lần nghe gần nhất để tìm đủ nghệ sĩ khác nhau. */
+const RECENT_PLAYS_SCANNED = 60;
+
+export interface PlaySeed {
+  videoId: string;
+  artistName: string;
+}
+
+/**
+ * Bài YouTube nghe gần đây, mỗi nghệ sĩ một bài, mới nhất trước — dùng làm hạt
+ * giống cho hàng "Vì bạn nghe …" trên trang chủ.
+ *
+ * Phải tự gộp theo nghệ sĩ ở JS: `artist_key` nằm trên `play_events` nhưng videoId
+ * cần lấy từ đúng lần nghe mới nhất, mà `max()` không mang theo cột khác được.
+ */
+export async function getRecentPlaySeeds(
+  userId: string,
+  limit: number,
+): Promise<PlaySeed[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      videoId: playEvents.youtubeVideoId,
+      artistKey: playEvents.artistKey,
+      artistName: youtubeTracks.artistName,
+      channelTitle: youtubeTracks.channelTitle,
+    })
+    .from(playEvents)
+    .innerJoin(
+      youtubeTracks,
+      eq(playEvents.youtubeVideoId, youtubeTracks.videoId),
+    )
+    .where(eq(playEvents.userId, userId))
+    .orderBy(desc(playEvents.startedAt))
+    .limit(RECENT_PLAYS_SCANNED);
+
+  const seeds: PlaySeed[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const name = row.artistName ?? row.channelTitle;
+    const key = row.artistKey ?? row.videoId;
+    // Không có tên thì không dựng được tiêu đề "Vì bạn nghe …" — bỏ hạt giống đó.
+    if (!row.videoId || key === null || name === null || seen.has(key))
+      continue;
+    seen.add(key);
+    seeds.push({ videoId: row.videoId, artistName: name });
+    if (seeds.length >= limit) break;
+  }
+  return seeds;
+}
+
 export async function getAllTracks(
   userId: string,
   limit = 200,
