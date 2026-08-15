@@ -8,6 +8,20 @@
       "when": 1786716757450,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786778970657,
+      "tag": "0001_cold_purifiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786798123280,
+      "tag": "0002_magenta_typhoid_mary",
+      "breakpoints": true
     }
   ]
 }

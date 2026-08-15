@@ -6,6 +6,7 @@ import {
   Disc3,
   HardDriveDownload,
   ListMusic,
+  ListPlus,
   LogOut,
   Radio,
   Search,
@@ -19,6 +20,7 @@ const LINKS = [
   { href: "/albums", label: "Album", icon: Disc3 },
   { href: "/artists", label: "Nghệ sĩ", icon: Users },
   { href: "/tracks", label: "Bài hát", icon: ListMusic },
+  { href: "/playlists", label: "Playlist", icon: ListPlus },
   { href: "/search", label: "Tìm kiếm", icon: Search },
 ] as const;
 

@@ -80,12 +80,13 @@ Tạo một Blob store trong dashboard Vercel → Storage, rồi điền
 `.env.local` đã có sẵn `ENCRYPTION_KEY` và `AUTH_SECRET` được sinh ngẫu nhiên.
 Còn lại phải đăng ký ở ba cổng developer:
 
-| Nhà cung cấp | Nơi đăng ký | Redirect URI cần thêm |
-|---|---|---|
-| Google (đăng nhập) | [console.cloud.google.com](https://console.cloud.google.com) → Credentials | `http://localhost:3000/api/auth/callback/google` |
-| Google Drive | cùng OAuth client ở trên | `http://localhost:3000/api/connections/oauth/google_drive/callback` |
-| Dropbox | [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) | `http://localhost:3000/api/connections/oauth/dropbox/callback` |
-| OneDrive | [portal.azure.com](https://portal.azure.com) → App registrations | `http://localhost:3000/api/connections/oauth/onedrive/callback` |
+| Nhà cung cấp            | Nơi đăng ký                                                                | Redirect URI cần thêm                                               |
+| ----------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Google (đăng nhập)      | [console.cloud.google.com](https://console.cloud.google.com) → Credentials | `http://localhost:3000/api/auth/callback/google`                    |
+| Google Drive            | cùng OAuth client ở trên                                                   | `http://localhost:3000/api/connections/oauth/google_drive/callback` |
+| Dropbox                 | [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps)     | `http://localhost:3000/api/connections/oauth/dropbox/callback`      |
+| OneDrive                | [portal.azure.com](https://portal.azure.com) → App registrations           | `http://localhost:3000/api/connections/oauth/onedrive/callback`     |
+| YouTube (radio theo gu) | cùng OAuth client Google                                                   | `http://localhost:3000/api/youtube/oauth/callback`                  |
 
 Quyền cần bật cho Dropbox: `account_info.read`, `files.metadata.read`,
 `files.content.read`.
@@ -112,7 +113,7 @@ vào nhóm **restricted scope**, kéo theo hai hệ quả thật:
   `needs_reauth` và hiện nút cấp quyền lại, không sập.
 - **Muốn Published**: Google yêu cầu app verification kèm CASA security assessment
   — tốn tiền và mất vài tuần.
-- **Có Google Workspace**: đặt consent screen là *Internal* thì tránh được cả hai.
+- **Có Google Workspace**: đặt consent screen là _Internal_ thì tránh được cả hai.
 
 `drive.file` không thay thế được vì scope đó chỉ thấy file do chính app tạo ra.
 
@@ -121,15 +122,89 @@ Dropbox trước.
 
 ---
 
+## YouTube
+
+YouTube là nguồn nhạc chính thức của app, ngang hàng với kho lưu trữ:
+
+- **Tìm bất cứ bài nào**: trang _Tìm kiếm_ có mục "Trên YouTube" bên dưới kết quả
+  thư viện. Mỗi dòng phát được ngay, chèn được vào hàng đợi, thêm được vào playlist.
+- **Radio tự dài ra**: bấm **Radio** ở một bài (thư viện hay YouTube) để nối tiếp
+  bài tương tự. Nguồn ứng viên là **automix của YouTube Music** — thứ YouTube tự
+  nối sau một bài — rồi xếp lại theo gu và lịch sử nghe trong app.
+- **Playlist thủ công**: sửa thứ tự bằng ▲▼, đổi tên ngay ở tiêu đề, trộn bài thư
+  viện với bài YouTube trong cùng một danh sách.
+- **Trang chủ**: "Nghe gần đây" (từ `play_events` của app) và các hàng gợi ý YouTube
+  Music trả về.
+
+### Nguồn audio
+
+Bài YouTube **không** phát bằng iframe nữa. Server lấy URL audio thật qua
+[`youtubei.js`](https://github.com/LuanRT/YouTube.js) (client `VISIONOS`, ngã dự
+phòng `ANDROID_VR`), rồi `/api/youtube/audio/<videoId>` chuẩn hoá byte-range để thẻ
+`<audio>` của chính app đọc. Nhờ vậy mới **phát nền được trên điện thoại** (xem mục
+dưới) — media trong iframe cross-origin thì không điều khiển được.
+
+Ba điều phải biết:
+
+- Đây là **API nội bộ của YouTube**, không phải API công khai: nó có thể vỡ bất cứ
+  lúc nào. Đo được 2026-08: `ANDROID_VR` đã bị siết, URL của nó chỉ phục vụ 1 MiB
+  đầu rồi trả `403`; `VISIONOS` vẫn phục vụ hết bài. Thứ tự client nằm ở
+  `CLIENTS` trong `src/lib/youtube/resolve.ts` — client nào hỏng thì đổi chỗ.
+  Hỏng hết thì player tự lùi về iframe (`YoutubeFallbackGate`), vẫn nghe được nhưng
+  mất phát nền.
+- googlevideo trả `403` cho range mở (`bytes=0-`) và cho range phủ đúng cả file, nên
+  proxy luôn hỏi từng lô ≤ 1 MiB rồi nối lại. Đừng "tối ưu" bằng cách hỏi cả file.
+- **Byte không được đi qua Vercel**: AUP cấm proxy/host media, và Vercel tính tiền
+  hai lần. Deploy thì đặt `YT_AUDIO_ORIGIN` trỏ sang VPS tự host (một droplet
+  $4/tháng, 500 GiB egress ≈ 10.000 giờ nghe audio-only).
+
+### Phát nền trên điện thoại
+
+- **Android (Chrome)**: chạy được ngay, kể cả khi khoá máy — Chromium chỉ tạm dừng
+  media ẩn khi media đó **có video**, còn đây là audio thuần.
+- **iOS (Safari)**: phải **Thêm vào Màn hình chính** rồi mở từ icon đó. Web app
+  standalone mới được phát nền (từ iOS 15.4); mở trong tab Safari thì khoá máy là
+  nhạc dừng.
+
+Điều khiển trên màn hình khoá / tai nghe dùng Media Session API, có cả thanh tua.
+
+### Tài khoản & khoá API
+
+Cả hai đều **tuỳ chọn** — không có gì thì tìm kiếm, radio, gợi ý vẫn chạy (InnerTube
+không cần credential và không tốn quota):
+
+1. **Nối tài khoản YouTube** ở _Cài đặt → Kho lưu trữ → Gu nhạc YouTube_: thêm phần
+   cá nhân hoá theo video đã Thích và kênh đã Đăng ký. Dùng lại
+   `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`, cần redirect URI
+   `http://localhost:3000/api/youtube/oauth/callback` và scope
+   `https://www.googleapis.com/auth/youtube.readonly` (**sensitive**; refresh token
+   ở chế độ Testing sống 7 ngày, hết thì UI hiện "Cấp quyền lại").
+2. **`YOUTUBE_API_KEY`**: giờ chỉ còn cho mục "Đang thịnh hành"
+   (`videos.list?chart=mostPopular`, **1 unit**/lần, cache 6 giờ) và nhánh dò
+   playlist dự phòng khi automix quá mỏng. Không có key thì mục đó tự ẩn.
+3. **`YT_MUSIC_COOKIE`** (tuỳ chọn): cá nhân hoá hàng gợi ý trang chủ. Dùng **tài
+   khoản phụ** — export cookie từ cửa sổ ẩn danh rồi đóng vĩnh viễn cửa sổ đó, và
+   biết rằng YouTube có thể khoá tài khoản dùng theo cách này. Đường phát nhạc
+   **không bao giờ** nhận cookie này (gắn cookie sẽ đẩy resolve sang `web`, kéo theo
+   DRM/SABR/PO token).
+
+**Quota**: `search.list` của Data API còn 100 lần/ngày mỗi project, nhưng app gần như
+không dùng nữa — tìm kiếm và automix đi qua InnerTube. Một lần đồng bộ gu nhạc ≈ 20
+unit. Quota tính cho project của credential thực gửi đi.
+
+---
+
 ## Chi phí băng thông
 
-| Nguồn | Byte đi qua Vercel |
-|---|---|
-| Dropbox, OneDrive | ~0 (302 redirect) |
-| Google Drive | toàn bộ — khoảng 60–100 MB cho mỗi giờ nghe |
+| Nguồn             | Byte đi qua Vercel                               |
+| ----------------- | ------------------------------------------------ |
+| Dropbox, OneDrive | ~0 (302 redirect)                                |
+| Google Drive      | toàn bộ — khoảng 60–100 MB cho mỗi giờ nghe      |
+| YouTube           | ~50 MB/giờ — **phải** dời sang `YT_AUDIO_ORIGIN` |
 
 Nếu Drive trở nên tốn kém, bước nâng cấp tiếp theo là cache những bài nghe nhiều
-sang Vercel Blob rồi phục vụ qua CDN.
+sang Vercel Blob rồi phục vụ qua CDN. Nhánh YouTube thì không có lựa chọn: AUP của
+Vercel cấm proxy media, nên byte audio phải nằm trên VPS riêng.
 
 ---
 

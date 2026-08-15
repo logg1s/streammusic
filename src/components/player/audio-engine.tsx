@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   peekCurrentTrack,
   peekNeighbourIds,
-  registerAudioElement,
+  registerSink,
   useCurrentTrack,
   usePlayer,
 } from "@/store/player";
@@ -72,6 +72,7 @@ export function AudioEngine() {
   const isPlaying = usePlayer((s) => s.isPlaying);
   const volume = usePlayer((s) => s.volume);
   const muted = usePlayer((s) => s.muted);
+  const ytFallback = usePlayer((s) => s.ytFallback);
 
   const setSlotRef = (index: number) => (el: HTMLAudioElement | null) => {
     els.current[index] = el;
@@ -110,7 +111,17 @@ export function AudioEngine() {
    */
   const reconcile = useCallback(() => {
     const state = usePlayer.getState();
-    const currentId = peekCurrentTrack()?.id ?? null;
+    const current = peekCurrentTrack();
+
+    // Chỉ khi proxy audio đã thất bại thì YouTubeEngine (iframe) mới giữ tiếng. Hồ
+    // <audio> phải im hẳn và KHÔNG đăng ký sink, nếu không hai engine cùng ra tiếng.
+    if (current?.source === "youtube" && state.ytFallback) {
+      els.current.forEach((el) => el?.pause());
+      currentSlot.current = -1;
+      return;
+    }
+
+    const currentId = current?.id ?? null;
     const keep = peekNeighbourIds(KEEP_RADIUS);
 
     const previousSlot = currentSlot.current;
@@ -127,7 +138,9 @@ export function AudioEngine() {
         // tua tới giữa bài. Kéo sẵn 6MB từ đầu file lúc đó là phí — chỉ lấy metadata,
         // phần dữ liệu thật sẽ tải từ đúng vị trí tua.
         victim.preload = state.pendingSeek !== null ? "metadata" : "auto";
-        victim.src = `/api/stream/${currentId}`;
+        // Bài YouTube đi qua proxy `/api/youtube/audio/<videoId>`; bài thư viện qua
+        // `/api/stream/<id>`. Cả hai đều trả 206 có biên nên thẻ <audio> tua được.
+        victim.src = current?.audioUrl ?? `/api/stream/${currentId}`;
         victim.load();
         holds.current[slot] = currentId;
         freshlyLoaded = true;
@@ -144,11 +157,17 @@ export function AudioEngine() {
 
     const el = slot === -1 ? null : els.current[slot];
     if (!currentId || !el) {
-      registerAudioElement(null);
+      registerSink("library", null);
+      registerSink("youtube", null);
       return;
     }
 
-    registerAudioElement(el);
+    // Sink đăng ký theo nguồn của bài hiện tại: hồ <audio> giờ phát cả hai nguồn.
+    registerSink(current?.source ?? "library", {
+      seek: (seconds) => {
+        el.currentTime = seconds;
+      },
+    });
 
     // 3. Thẻ tái dùng có thể đang nằm ở cuối bài cũ. Không đưa về 0 thì `ended` bắn
     //    ngay khi phát, kéo theo handleEnded -> next, và prev bị bập bênh vô hạn.
@@ -203,8 +222,10 @@ export function AudioEngine() {
       if (repeat === "all") p = p % order.length;
       else if (p >= order.length) break;
 
-      const id = queue[order[p]]?.id;
-      if (!id || holds.current.includes(id)) continue;
+      const item = queue[order[p]];
+      if (!item) continue;
+      const id = item.id;
+      if (holds.current.includes(id)) continue;
 
       const slot = pickVictim(peekNeighbourIds(KEEP_RADIUS));
       if (slot === -1 || slot === currentSlot.current) return;
@@ -213,17 +234,18 @@ export function AudioEngine() {
       if (!el || !el.paused) return;
 
       el.preload = "auto";
-      el.src = `/api/stream/${id}`;
+      el.src = item.audioUrl ?? `/api/stream/${id}`;
       el.load();
       holds.current[slot] = id;
       return;
     }
   }, [pickVictim]);
 
-  // Effect DUY NHẤT điều khiển phát nhạc.
+  // Effect DUY NHẤT điều khiển phát nhạc. `ytFallback` cũng nằm đây: khi nó bật thì
+  // reconcile phải chạy lại để nhả tiếng cho iframe, và ngược lại khi tắt.
   useEffect(() => {
     reconcile();
-  }, [trackId, isPlaying, reconcile]);
+  }, [trackId, isPlaying, ytFallback, reconcile]);
 
   // Sau khi đổi bài, nạp sẵn dần các bài phía trước theo lịch. Đổi bài lần nữa thì
   // huỷ lịch cũ, nên bấm next liên tục không kéo về một loạt bài chỉ lướt qua.
@@ -236,7 +258,10 @@ export function AudioEngine() {
   }, [trackId, prefetchAhead]);
 
   useEffect(() => {
-    return () => registerAudioElement(null);
+    return () => {
+      registerSink("library", null);
+      registerSink("youtube", null);
+    };
   }, []);
 
   // Âm lượng áp cho cả hồ, để thẻ đệm sẵn không phát to bất ngờ khi tới lượt.
@@ -280,7 +305,8 @@ export function AudioEngine() {
       [
         "seekto",
         (details) => {
-          if (details.seekTime != null) usePlayer.getState().seek(details.seekTime);
+          if (details.seekTime != null)
+            usePlayer.getState().seek(details.seekTime);
         },
       ],
     ];
@@ -311,7 +337,8 @@ export function AudioEngine() {
   }, [isPlaying]);
 
   /** Chỉ thẻ đang phát mới được cập nhật store — thẻ đệm phải im lặng. */
-  const isCurrent = (el: HTMLAudioElement) => el === els.current[currentSlot.current];
+  const isCurrent = (el: HTMLAudioElement) =>
+    el === els.current[currentSlot.current];
 
   const audioProps = {
     preload: "auto" as const,
@@ -320,6 +347,19 @@ export function AudioEngine() {
       if (!isCurrent(el)) return;
       usePlayer.getState().syncTime(el.currentTime, el.duration);
       maybePreloadNext(el.currentTime, el.duration);
+      // Thanh tua trên màn hình khoá điện thoại chỉ chạy khi có setPositionState.
+      // Nó ném nếu duration là NaN (chưa có metadata) nên phải bọc.
+      if ("mediaSession" in navigator && Number.isFinite(el.duration)) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: el.duration,
+            position: Math.min(el.currentTime, el.duration),
+            playbackRate: 1,
+          });
+        } catch {
+          // Trình duyệt cũ không có setPositionState — bỏ qua.
+        }
+      }
     },
     onLoadedMetadata: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       const el = e.currentTarget;
@@ -361,11 +401,16 @@ export function AudioEngine() {
     },
     onError: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       if (!isCurrent(e.currentTarget)) return;
-      usePlayer
-        .getState()
-        .setError(
-          "Không tải được bài hát. Kết nối kho lưu trữ có thể cần cấp quyền lại.",
-        );
+      const state = usePlayer.getState();
+      // Bài YouTube: proxy có thể bị chặn hoặc video không phát được. Đừng cắt nhạc —
+      // bật iframe làm dự phòng, giữ nguyên vị trí đang nghe.
+      if (peekCurrentTrack()?.source === "youtube") {
+        state.setYtFallback(true);
+        return;
+      }
+      state.setError(
+        "Không tải được bài hát. Kết nối kho lưu trữ có thể cần cấp quyền lại.",
+      );
     },
   };
 

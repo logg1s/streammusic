@@ -1,5 +1,6 @@
 import { AlbumGrid } from "@/components/library/album-grid";
 import { TrackList } from "@/components/library/track-list";
+import { YoutubeSearch } from "@/components/library/youtube-search";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { searchLibrary } from "@/lib/library";
@@ -24,10 +25,12 @@ export default async function SearchPage({
   return (
     <>
       <PageHeader
-        eyebrow="Thư viện"
+        eyebrow="Thư viện và YouTube"
         title="Tìm kiếm"
         readout={
-          query ? `“${query}”  ·  ${found} kết quả` : "Tên bài, nghệ sĩ hoặc album"
+          query
+            ? `“${query}”  ·  ${found} kết quả trong thư viện`
+            : "Tên bài, nghệ sĩ hoặc album"
         }
       />
 
@@ -47,9 +50,9 @@ export default async function SearchPage({
       </form>
 
       {query && found === 0 && (
-        <p className="text-sm text-muted-foreground">
-          Không có kết quả cho “{query}”. Thử từ khoá ngắn hơn, hoặc quét lại kho
-          lưu trữ nếu bài hát mới được thêm.
+        <p className="mb-8 text-sm text-muted-foreground">
+          Thư viện không có kết quả cho “{query}”. Xem mục “Trên YouTube” bên
+          dưới, hoặc quét lại kho lưu trữ nếu bài hát mới được thêm.
         </p>
       )}
 
@@ -67,6 +70,8 @@ export default async function SearchPage({
             <TrackList tracks={results.tracks} />
           </section>
         )}
+
+        <YoutubeSearch key={query} query={query} />
       </div>
     </>
   );

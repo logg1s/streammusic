@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ListMusic, SkipForward } from "lucide-react";
+import { ListMusic, Radio, SkipForward } from "lucide-react";
 import { Cover } from "@/components/library/cover";
 import {
   IconButton,
@@ -14,7 +14,9 @@ import {
 } from "@/components/player/controls";
 import { NowPlayingSheet } from "@/components/player/now-playing-sheet";
 import { QueuePanel } from "@/components/player/queue-panel";
+import { useRadioConfig } from "@/components/player/radio-context";
 import { PROVIDER_LABEL } from "@/lib/provider-labels";
+import { startRadioFor } from "@/lib/radio-client";
 import { shortCodec } from "@/lib/utils";
 import { useCurrentTrack, usePlayer } from "@/store/player";
 
@@ -23,6 +25,8 @@ export function PlayerBar() {
   const isPlaying = usePlayer((s) => s.isPlaying);
   const error = usePlayer((s) => s.error);
   const hasQueue = usePlayer((s) => s.queue.length > 0);
+  const radioOn = usePlayer((s) => s.radio !== null);
+  const radioEnabled = useRadioConfig().enabled;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
 
@@ -50,6 +54,16 @@ export function PlayerBar() {
             <Scrubber className="max-w-xl" />
           </div>
           <div className="hidden items-center gap-1 md:flex md:w-[220px] md:justify-end">
+            {radioEnabled && (
+              <IconButton
+                label="Radio bài này"
+                onClick={() => track && startRadioFor(track)}
+                disabled={!track}
+                active={radioOn}
+              >
+                <Radio className="size-4" />
+              </IconButton>
+            )}
             <IconButton
               label="Hàng đợi"
               onClick={() => setQueueOpen(true)}

@@ -1,21 +1,31 @@
 import { count, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { scanRoots, tracks } from "@/db/schema";
+import {
+  scanRoots,
+  tracks,
+  youtubeTasteArtists,
+  youtubeTasteVideos,
+} from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { ConnectionsManager } from "@/components/settings/connections-manager";
+import { YoutubeLink } from "@/components/settings/youtube-link";
 import { requireUserId } from "@/lib/auth";
 import { listConnections } from "@/lib/connections";
 import { ALL_PROVIDERS } from "@/lib/providers";
+import {
+  getYoutubeAccount,
+  isYoutubeOauthConfigured,
+} from "@/lib/youtube/account";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConnectionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; connected?: string }>;
+  searchParams: Promise<{ error?: string; connected?: string; youtube?: string }>;
 }) {
   const userId = await requireUserId();
-  const { error, connected } = await searchParams;
+  const { error, connected, youtube } = await searchParams;
 
   const connections = await listConnections(userId);
   const db = getDb();
@@ -52,6 +62,18 @@ export default async function ConnectionsPage({
     displayName: p.displayName,
   }));
 
+  const [ytAccount, [likedCount], [artistCount]] = await Promise.all([
+    getYoutubeAccount(userId),
+    db
+      .select({ value: count() })
+      .from(youtubeTasteVideos)
+      .where(eq(youtubeTasteVideos.userId, userId)),
+    db
+      .select({ value: count() })
+      .from(youtubeTasteArtists)
+      .where(eq(youtubeTasteArtists.userId, userId)),
+  ]);
+
   return (
     <>
       <PageHeader
@@ -76,6 +98,30 @@ export default async function ConnectionsPage({
           Đã nối {connected}. Chọn thư mục nhạc rồi bấm quét.
         </p>
       )}
+      {youtube && (
+        <p
+          role="status"
+          className="mb-6 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-accent-text"
+        >
+          Đã nối YouTube: {youtube}. Gu nhạc đã được đồng bộ.
+        </p>
+      )}
+
+      <YoutubeLink
+        account={
+          ytAccount
+            ? {
+                channelTitle: ytAccount.channelTitle,
+                status: ytAccount.status,
+                tasteSyncedAt:
+                  ytAccount.tasteSyncedAt?.toLocaleDateString("vi-VN") ?? null,
+              }
+            : null
+        }
+        likedCount={likedCount?.value ?? 0}
+        artistCount={artistCount?.value ?? 0}
+        configured={isYoutubeOauthConfigured()}
+      />
 
       <ConnectionsManager connections={views} available={available} />
     </>

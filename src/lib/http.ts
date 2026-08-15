@@ -1,5 +1,15 @@
 import { UnauthorizedError } from "@/lib/auth";
 import { ProviderApiError, ReauthRequiredError } from "@/lib/providers";
+import {
+  YoutubeApiError,
+  YoutubeNotConfiguredError,
+  YoutubeQuotaError,
+} from "@/lib/youtube/api";
+import { YoutubeReauthError } from "@/lib/youtube/account";
+import {
+  VideoUnplayableError,
+  YoutubeBlockedError,
+} from "@/lib/youtube/errors";
 
 /**
  * Origin công khai của app, dùng để dựng redirect_uri của OAuth.
@@ -28,16 +38,56 @@ export function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
 
+/**
+ * Đầu vào sai của người dùng (tên rỗng, danh sách không khớp…) → 400 kèm nguyên văn.
+ * Khai báo ở đây để `src/lib/playlists.ts` không phải kéo cả lớp HTTP vào, và để
+ * `src/lib/http.ts` vẫn không phụ thuộc gì nặng.
+ */
+export class PlaylistInputError extends Error {}
+
 /** Chuyển exception thành HTTP response nhất quán cho mọi route handler. */
 export function toErrorResponse(error: unknown): Response {
   if (error instanceof UnauthorizedError) {
     return jsonError("Chưa đăng nhập", 401);
   }
+  if (error instanceof PlaylistInputError) {
+    return jsonError(error.message, 400);
+  }
   if (error instanceof ReauthRequiredError) {
     return Response.json(
-      { error: error.message, code: "REAUTH_REQUIRED", provider: error.provider },
+      {
+        error: error.message,
+        code: "REAUTH_REQUIRED",
+        provider: error.provider,
+      },
       { status: 409 },
     );
+  }
+  if (error instanceof YoutubeNotConfiguredError) {
+    return jsonError(
+      "Chưa cấu hình YouTube — thêm YOUTUBE_API_KEY hoặc nối tài khoản YouTube",
+      503,
+    );
+  }
+  if (error instanceof YoutubeQuotaError) {
+    return jsonError("Hết quota YouTube hôm nay, thử lại sau", 429);
+  }
+  if (error instanceof YoutubeReauthError) {
+    return Response.json(
+      { error: error.message, code: "YOUTUBE_REAUTH" },
+      { status: 409 },
+    );
+  }
+  if (error instanceof YoutubeBlockedError) {
+    return jsonError("YouTube tạm chặn — chuyển sang player nhúng", 503);
+  }
+  if (error instanceof VideoUnplayableError) {
+    return jsonError("Video này không phát được", 422);
+  }
+  if (error instanceof YoutubeApiError) {
+    // Thân lỗi của Google có key, id video, chi tiết nội bộ — chỉ ghi log, không trả ra.
+    console.error(error);
+    return jsonError(`YouTube trả lỗi ${error.status}, thử lại sau`, 502);
   }
   if (error instanceof ProviderApiError) {
     console.error(error);

@@ -2,15 +2,22 @@ import Link from "next/link";
 import { AlbumGrid } from "@/components/library/album-grid";
 import { TrackList } from "@/components/library/track-list";
 import { EmptyState, PageHeader } from "@/components/page-header";
+import { YoutubeRows } from "@/components/library/youtube-rows";
 import { requireUserId } from "@/lib/auth";
-import { getAlbums, getLibraryStats, getRecentTracks } from "@/lib/library";
+import {
+  getAlbums,
+  getLibraryStats,
+  getRecentlyPlayed,
+  getRecentTracks,
+} from "@/lib/library";
 import { formatDuration } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const userId = await requireUserId();
-  const [recent, albums, stats] = await Promise.all([
+  const [played, recent, albums, stats] = await Promise.all([
+    getRecentlyPlayed(userId, 12),
     getRecentTracks(userId, 12),
     getAlbums(userId),
     getLibraryStats(userId),
@@ -32,11 +39,12 @@ export default async function HomePage() {
         readout={stats.trackCount > 0 ? readout : undefined}
       />
 
-      {stats.trackCount === 0 ? (
+      {stats.trackCount === 0 && played.length === 0 && (
         <EmptyState title="Thư viện còn trống">
           <p>
-            Nhạc của bạn vẫn nằm nguyên trên Drive, Dropbox hay OneDrive. Nối một
-            tài khoản rồi quét thư mục nhạc để bắt đầu nghe.
+            Nhạc của bạn vẫn nằm nguyên trên Drive, Dropbox hay OneDrive. Nối
+            một tài khoản rồi quét thư mục nhạc để bắt đầu nghe — hoặc tìm thẳng
+            bài trên YouTube ở mục Tìm kiếm.
           </p>
           <Link
             href="/settings/connections"
@@ -45,13 +53,24 @@ export default async function HomePage() {
             Nối kho lưu trữ
           </Link>
         </EmptyState>
-      ) : (
-        <div className="space-y-12">
+      )}
+
+      <div className="space-y-12">
+        {played.length > 0 && (
+          <section>
+            <h2 className="eyebrow mb-3">Nghe gần đây</h2>
+            <TrackList tracks={played} />
+          </section>
+        )}
+
+        {recent.length > 0 && (
           <section>
             <h2 className="eyebrow mb-3">Vừa thêm vào</h2>
             <TrackList tracks={recent} />
           </section>
+        )}
 
+        {albums.length > 0 && (
           <section>
             <div className="mb-4 flex items-baseline justify-between">
               <h2 className="eyebrow">Album</h2>
@@ -64,8 +83,10 @@ export default async function HomePage() {
             </div>
             <AlbumGrid albums={albums.slice(0, 10)} />
           </section>
-        </div>
-      )}
+        )}
+
+        <YoutubeRows />
+      </div>
     </>
   );
 }

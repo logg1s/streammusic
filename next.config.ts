@@ -8,10 +8,16 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "**.public.blob.vercel-storage.com",
       },
+      {
+        // Ảnh bìa bài YouTube trong hàng đợi radio.
+        protocol: "https",
+        hostname: "i.ytimg.com",
+      },
     ],
   },
   // music-metadata và @tokenizer/range là ESM thuần, chỉ chạy phía server.
-  serverExternalPackages: ["music-metadata", "@tokenizer/range"],
+  // youtubei.js dùng `node:` builtins nên bundler không được đóng gói nó.
+  serverExternalPackages: ["music-metadata", "@tokenizer/range", "youtubei.js"],
 };
 
 export default nextConfig;
