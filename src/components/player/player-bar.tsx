@@ -76,14 +76,16 @@ export function PlayerBar() {
 function MiniProgress() {
   const currentTime = usePlayer((s) => s.currentTime);
   const duration = usePlayer((s) => s.duration);
+  const isBuffering = usePlayer((s) => s.isBuffering);
   const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
 
   return (
-    <div className="h-0.5 w-full bg-surface-hover sm:hidden">
+    <div className="relative h-0.5 w-full overflow-hidden bg-surface-hover sm:hidden">
       <div
         className="h-full bg-accent transition-[width] duration-150"
         style={{ width: `${progress * 100}%` }}
       />
+      {isBuffering && <span className="progress-sweep" aria-hidden />}
     </div>
   );
 }

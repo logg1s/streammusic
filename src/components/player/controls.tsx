@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import {
+  Loader2,
   Pause,
   Play,
   Repeat,
@@ -54,29 +55,32 @@ export function IconButton({
 
 export function PlayPauseButton({ size = "md" }: { size?: "md" | "lg" }) {
   const isPlaying = usePlayer((s) => s.isPlaying);
+  const isBuffering = usePlayer((s) => s.isBuffering);
   const hasQueue = usePlayer((s) => s.queue.length > 0);
   const toggle = usePlayer((s) => s.toggle);
+
+  // Chỉ xoay khi người dùng đang muốn nghe mà chưa có tiếng. Đang tạm dừng thì
+  // dù có đệm ngầm cũng không hiện gì, tránh báo động giả.
+  const loading = isBuffering && isPlaying;
+  const iconSize = size === "lg" ? "size-6" : "size-5";
 
   return (
     <button
       type="button"
       onClick={toggle}
       disabled={!hasQueue}
-      aria-label={isPlaying ? "Tạm dừng" : "Phát"}
+      aria-label={loading ? "Đang tải" : isPlaying ? "Tạm dừng" : "Phát"}
       className={cn(
         "grid shrink-0 place-items-center rounded-full bg-accent text-accent-foreground transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-subtle disabled:hover:scale-100",
         size === "lg" ? "size-14" : "size-10",
       )}
     >
-      {isPlaying ? (
-        <Pause className={cn("fill-current", size === "lg" ? "size-6" : "size-5")} />
+      {loading ? (
+        <Loader2 className={cn("animate-spin", iconSize)} />
+      ) : isPlaying ? (
+        <Pause className={cn("fill-current", iconSize)} />
       ) : (
-        <Play
-          className={cn(
-            "translate-x-px fill-current",
-            size === "lg" ? "size-6" : "size-5",
-          )}
-        />
+        <Play className={cn("translate-x-px fill-current", iconSize)} />
       )}
     </button>
   );
@@ -146,6 +150,7 @@ export function Scrubber({ className }: { className?: string }) {
   const duration = usePlayer((s) => s.duration);
   const seek = usePlayer((s) => s.seek);
   const hasQueue = usePlayer((s) => s.queue.length > 0);
+  const isBuffering = usePlayer((s) => s.isBuffering);
 
   const barRef = useRef<HTMLDivElement>(null);
   const [scrubTo, setScrubTo] = useState<number | null>(null);
@@ -197,13 +202,15 @@ export function Scrubber({ className }: { className?: string }) {
           else return;
           e.preventDefault();
         }}
+        aria-busy={isBuffering}
         className="group relative h-6 flex-1 cursor-pointer touch-none"
       >
-        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-surface-hover">
+        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-surface-hover">
           <div
             className="h-full rounded-full bg-accent"
             style={{ width: `${progress * 100}%` }}
           />
+          {isBuffering && <span className="progress-sweep" aria-hidden />}
         </div>
         <div
           className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"

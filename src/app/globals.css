@@ -153,11 +153,49 @@ body {
   animation: bar-pulse 900ms ease-in-out infinite;
 }
 
+/* Vệt sáng chạy trên thanh tua trong lúc chờ dữ liệu. Phần tử cha phải
+   có `position: relative` và `overflow: hidden`. */
+@keyframes progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+.progress-sweep {
+  position: absolute;
+  inset-block: 0;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent) 50%,
+    transparent
+  );
+  animation: progress-sweep 1.1s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .eq-bar {
     animation: none;
     transform: scaleY(0.7);
   }
+
+  /*
+    Luật chung bên dưới rút mọi animation xuống 0.01ms. Với vệt sáng, điều đó
+    biến nó thành một vệt nháy giật đứng yên lệch chỗ — khó chịu hơn cả hiệu ứng
+    gốc. Thay bằng một vạch màu nhấn mờ phủ kín, vẫn báo được "đang tải".
+  */
+  .progress-sweep {
+    animation: none;
+    width: 100%;
+    background: var(--accent);
+    opacity: 0.35;
+  }
+
   *,
   *::before,
   *::after {

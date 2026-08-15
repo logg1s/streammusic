@@ -158,8 +158,10 @@ export const googleDriveProvider: StorageProvider = {
       scope: SCOPES,
       // access_type=offline + prompt=consent là cách duy nhất chắc chắn nhận được
       // refresh_token; Google chỉ cấp nó ở lần đồng ý đầu tiên nếu không ép prompt.
+      // Thêm select_account để người có nhiều tài khoản Google chọn được đúng Drive
+      // muốn nối — nếu không, Google im lặng dùng tài khoản đang hoạt động.
       access_type: "offline",
-      prompt: "consent",
+      prompt: "consent select_account",
       include_granted_scopes: "true",
       state,
     });

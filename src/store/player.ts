@@ -33,6 +33,14 @@ interface PlayerState {
   position: number;
 
   isPlaying: boolean;
+  /**
+   * Đang chờ dữ liệu để phát.
+   *
+   * Có riêng vì `isPlaying` bật lên ngay lúc bấm, trong khi tiếng chỉ ra sau ~3 giây
+   * (TTFB của Google Drive). Không có trạng thái này thì giao diện im lìm suốt quãng
+   * đó và người dùng không phân biệt được đang tải hay đã đơ.
+   */
+  isBuffering: boolean;
   currentTime: number;
   duration: number;
   volume: number;
@@ -59,6 +67,7 @@ interface PlayerState {
   /** Chỉ AudioEngine gọi — đồng bộ state theo sự kiện của thẻ <audio>. */
   syncTime: (currentTime: number, duration: number) => void;
   syncPlaying: (isPlaying: boolean) => void;
+  setBuffering: (value: boolean) => void;
   setError: (message: string | null) => void;
 }
 
@@ -78,6 +87,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   order: [],
   position: 0,
   isPlaying: false,
+  isBuffering: false,
   currentTime: 0,
   duration: 0,
   volume: 1,
@@ -204,7 +214,14 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   },
 
   clearQueue() {
-    set({ queue: [], order: [], position: 0, isPlaying: false, currentTime: 0 });
+    set({
+      queue: [],
+      order: [],
+      position: 0,
+      isPlaying: false,
+      isBuffering: false,
+      currentTime: 0,
+    });
   },
 
   syncTime(currentTime, duration) {
@@ -215,8 +232,12 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     set({ isPlaying });
   },
 
+  setBuffering(isBuffering) {
+    set({ isBuffering });
+  },
+
   setError(error) {
-    set({ error, isPlaying: false });
+    set({ error, isPlaying: false, isBuffering: false });
   },
 }));
 

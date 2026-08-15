@@ -20,7 +20,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
     verificationTokensTable: verificationTokens,
   }),
   session: { strategy: "jwt" },
-  providers: [Google],
+  providers: [
+    Google({
+      // Không có `prompt`, Google im lặng dùng lại phiên đang có trên máy và trả về
+      // ngay — người dùng thấy như bị "tự động đăng nhập". Ép hiện màn hình chọn
+      // tài khoản để trên máy dùng chung, mỗi người tự chọn đúng tài khoản của mình.
+      authorization: { params: { prompt: "select_account" } },
+    }),
+  ],
   pages: { signIn: "/login" },
   callbacks: {
     session({ session, token }) {

@@ -79,6 +79,13 @@ export function AudioEngine() {
       activeEl.load();
       loaded.current[active] = trackId;
     }
+
+    // Đặt trạng thái đệm theo readyState thật thay vì đoán. Nhờ vậy bài đã đệm sẵn
+    // ở thẻ kia (chuyển bài chỉ mất ~136ms) không bị nháy hiệu ứng tải, còn bài nạp
+    // mới thì hiện ngay từ lúc bấm.
+    usePlayer
+      .getState()
+      .setBuffering(activeEl.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
   }, [trackId, active, idle, elementAt]);
 
   // Đồng bộ trạng thái phát. Phụ thuộc cả trackId để bài mới tự chạy tiếp.
@@ -206,6 +213,21 @@ export function AudioEngine() {
     },
     onEnded: () => {
       if (slot === active) usePlayer.getState().handleEnded();
+    },
+
+    /* Vòng đời đệm. `waiting` là lúc trình duyệt hết dữ liệu để phát tiếp (tua vào
+       vùng chưa tải, hoặc mạng chậm), `stalled` là lúc không nhận được byte nào. */
+    onWaiting: () => {
+      if (slot === active) usePlayer.getState().setBuffering(true);
+    },
+    onStalled: () => {
+      if (slot === active) usePlayer.getState().setBuffering(true);
+    },
+    onCanPlay: () => {
+      if (slot === active) usePlayer.getState().setBuffering(false);
+    },
+    onPlaying: () => {
+      if (slot === active) usePlayer.getState().setBuffering(false);
     },
     onError: () => {
       if (slot !== active) return;
