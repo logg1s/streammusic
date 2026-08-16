@@ -50,6 +50,12 @@ people guessing.
       the player store by a shared subscriber rather than called from inside the engines —
       the engines are where invariant 1 lives and where the tripwire is blind
 - [x] `analytics_events` live in production, ingest smoke-tested end to end
+- [x] **v0.3.1 shipped on all three shells.** Every telemetry commit landed *after* the
+      v0.3.0 tag, so the binaries users actually had emitted nothing. The baseline clock
+      starts at this release, not at the merge
+- [x] Google Play Data safety declaration updated for the 11 events
+- [ ] Confirm real device events reach `analytics_events` — a smoke test from a dev
+      machine is not proof that a shipped Android build reports
 - [ ] Finer `origin` than radio-vs-queue (search / recent / album / playlist) — needs work
       at each play call site, deferred until the coarse split proves insufficient
 - [ ] Four weekly reviews to establish baselines
@@ -59,9 +65,6 @@ warnings`, and the invariant tripwire, in four parallel jobs. Unverified on GitH
 itself — the account is billing-locked, so it has only been run locally.
 
 ## Next
-
-**Open-source readiness.** The repo has no LICENSE, no CONTRIBUTING, no issue templates,
-and a committed APK at the root. Nobody can contribute to a project they cannot orient in.
 
 **Reliability of the thing that can break.** YouTube resolution is an unowned dependency.
 Once `resolve_fail` has a baseline, decide whether it needs a fallback path.

@@ -12,11 +12,12 @@ never outrank a `measured` at equal impact.
 
 | # | Item | Shell | Impact | Effort | Evidence | Invariants touched | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Wire telemetry events + Settings opt-out | all | Unblocks every other decision | M | measured (no data exists) | none | **partly done** — pipeline, opt-out and 3 of 11 events shipped; the 8 playback events still have no emitter |
-| ✅ 2 | LICENSE (AGPL-3.0), CONTRIBUTING, SECURITY, CoC, issue/PR templates | repo | Contributor pipeline | S | measured (files absent) | none | done 2026-08-16; security contact still a placeholder |
+| ✅ 1 | Wire telemetry events + Settings opt-out | all | Unblocks every other decision | M | measured (no data exists) | none | code done 2026-08-16 — pipeline, opt-out and all 11 events. **Not yet in users' hands**: every telemetry commit landed after the v0.3.0 tag, so the released APK/exe emit nothing. See item 13 |
+| ✅ 2 | LICENSE (AGPL-3.0), CONTRIBUTING, SECURITY, CoC, issue/PR templates | repo | Contributor pipeline | S | measured (files absent) | none | done 2026-08-16; security contact is a real address (`SECURITY.md`) |
 | ~~3~~ | ~~Remove committed `Vong_0.1.0_arm64.apk`~~ — **not a real item**: `git log --all` shows it was never committed and `.gitignore` already matched `/Vong_*.apk`. It was an untracked build artefact; deleted from the working tree. A cautionary example of an item scored `measured` on an unverified assumption | repo | — | — | measured, wrongly | none |
 | ✅ 4 | CI runs `npm test` + `cargo clippy` | repo | 74 tests existed and never ran on PRs | S | measured | none | done 2026-08-16; unverified on Actions (billing lock) |
 | ✅ 5 | Invariant check script wired into CI | repo | The five hard rules in `AGENTS.md` were unenforced | M | measured | all five | done 2026-08-16 |
+| 13 | Ship v0.3.1 so telemetry reaches devices + update Play Data safety | all | Starts the baseline clock that items 6–12 all wait on | S | measured (commit order vs `v0.3.1` tag) | none | **the gating item** — until it ships, "four weekly reviews" has not begun |
 
 ## Candidates — need evidence before they can be ranked
 

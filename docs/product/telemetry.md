@@ -55,6 +55,39 @@ which is not enough to make decisions from and biases toward the most engaged us
 trade is only defensible because the data collected is genuinely anonymous and genuinely
 narrow — which is what the two lists above are for.
 
+## Google Play Data safety declaration
+
+Current as of **v0.3.1 (versionCode 4)** — the first build in which any of these events
+actually leave a user's device. Fill the Play Console form to match this table exactly;
+if the two disagree, this file is wrong and must be corrected, not the form.
+
+Every row below is **collected, not shared**, encrypted in transit, and **optional** —
+Settings carries an off switch, which is what lets us tick "Users can choose whether this
+data is collected".
+
+| Play data type | Category | What it is here | Purpose |
+| --- | --- | --- | --- |
+| App interactions | App activity | `app_open`, `play_start`, `play_end`, `radio_seed`, `radio_refill`, `queue_end`, `search_run` (count only), `setting_change` | Analytics |
+| Other actions | App activity | `session_end` — session length and track count | Analytics |
+| Crash logs | App info and performance | `playback_error` with a stage and code, no stack or message | Analytics |
+| Diagnostics | App info and performance | `resolve_fail` reason, `ttfaMs` timing | Analytics |
+| Device or other IDs | Device or other IDs | `installId` — random, app-generated, not the advertising ID, not Android ID, not any hardware identifier | Analytics |
+
+`installId` is declared conservatively. It is not a Play-recognised device identifier and
+does not survive a reinstall, but it is a persistent per-install pseudonym, and under-
+declaring an identifier is the failure mode that gets an app pulled.
+
+**Not declared, because it is not collected:** search query text, track/artist/album/
+playlist names, account identity, email, file paths, URLs, tokens, location. See "What is
+never collected" above — that list is enforced by `sanitizeProps()` and its tests, so
+these rows can be left unticked without hedging.
+
+**Open question, out of scope for this table:** library streaming sends
+`Authorization: Bearer` to the project's own server, and the storage-provider OAuth flow
+handles tokens. Neither is telemetry, but both may need their own rows under "Personal
+info" / "Files and docs" depending on what the server retains. Resolve before submission —
+this table covers the analytics pipeline only and does not certify the whole app.
+
 ## Obligations when changing this
 
 - Adding an event means updating `ANALYTICS_EVENTS`, this table, **and** the Google Play
