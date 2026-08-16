@@ -8,6 +8,7 @@ import {
 } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { ConnectionsManager } from "@/components/settings/connections-manager";
+import { TelemetryToggle } from "@/components/settings/telemetry-toggle";
 import { YoutubeLink } from "@/components/settings/youtube-link";
 import { requireUserId } from "@/lib/auth";
 import { listConnections } from "@/lib/connections";
@@ -124,6 +125,8 @@ export default async function ConnectionsPage({
       />
 
       <ConnectionsManager connections={views} available={available} />
+
+      <TelemetryToggle />
     </>
   );
 }

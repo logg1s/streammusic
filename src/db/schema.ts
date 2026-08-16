@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -336,6 +337,53 @@ export const playEvents = pgTable(
   ],
 );
 
+/* ------------------------------------------------------------------ */
+/* Telemetry sản phẩm — ẩn danh, tách hẳn khỏi danh tính người dùng     */
+/* ------------------------------------------------------------------ */
+
+export const analyticsShellEnum = pgEnum("analytics_shell", [
+  "web",
+  "android",
+  "windows",
+]);
+
+/**
+ * Số liệu vận hành: bao nhiêu phiên có radio, bỏ bài trong bao lâu, bao lâu thì ra
+ * tiếng, resolve hỏng bao nhiêu phần trăm.
+ *
+ * Cố tình KHÔNG có `userId` và KHÔNG có khoá ngoại tới `user` — nếu nối được vào tài
+ * khoản thì đây không còn là bảng đếm mà thành hồ sơ nghe nhạc thứ hai. Muốn phân tích
+ * theo người dùng thì dùng `play_events`, nơi việc đó là chủ đích và có kiểm soát.
+ *
+ * `installId` do máy người dùng sinh ra và có thể xoá; danh mục sự kiện được chốt cứng
+ * ở `ANALYTICS_EVENTS` trong `@vong/shared` và ghi lại ở docs/product/telemetry.md.
+ */
+export const analyticsEvents = pgTable(
+  "analytics_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** UUID sinh tại máy, ẩn danh. */
+    installId: uuid("install_id").notNull(),
+    /** Một lần chạy app; cho phép đếm chỉ số theo phiên mà không cần định danh máy. */
+    sessionId: uuid("session_id").notNull(),
+    shell: analyticsShellEnum("shell").notNull(),
+    appVersion: text("app_version"),
+    name: text("name").notNull(),
+    /** Đã qua `sanitizeProps` — chỉ còn nhãn ngắn, số và boolean. */
+    props: jsonb("props").$type<Record<string, string | number | boolean | null>>(),
+    /** Đồng hồ máy người dùng; có thể lệch, giữ lại để đo độ trễ gửi. */
+    clientTs: timestamp("client_ts", { withTimezone: true }).notNull(),
+    serverTs: timestamp("server_ts", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("analytics_events_name_time_idx").on(t.name, t.serverTs),
+    index("analytics_events_install_time_idx").on(t.installId, t.serverTs),
+    index("analytics_events_session_idx").on(t.sessionId),
+  ],
+);
+
 export const playlists = pgTable(
   "playlists",
   {
@@ -504,3 +552,4 @@ export type Playlist = typeof playlists.$inferSelect;
 export type PlaylistItem = typeof playlistItems.$inferSelect;
 export type YoutubeAccount = typeof youtubeAccounts.$inferSelect;
 export type PlayEvent = typeof playEvents.$inferSelect;
+export type AnalyticsEventRow = typeof analyticsEvents.$inferSelect;

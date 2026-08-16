@@ -48,6 +48,24 @@ export {
 } from "./player-request";
 export type { ResolvedAudio, YoutubeResolver } from "./player-request";
 
+export {
+  ANALYTICS_EVENTS,
+  createAnalytics,
+  isAnalyticsEvent,
+  sanitizeProps,
+} from "./analytics";
+export type {
+  Analytics,
+  AnalyticsBatch,
+  AnalyticsEvent,
+  AnalyticsEventName,
+  AnalyticsOptions,
+  AnalyticsProps,
+  AnalyticsPropValue,
+  AnalyticsShell,
+  AnalyticsStorage,
+} from "./analytics";
+
 export { createPlayerStore } from "./player-store";
 export type {
   PersistedPlayerState,

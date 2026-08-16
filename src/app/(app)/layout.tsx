@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AnalyticsProvider } from "@/components/analytics-provider";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MobileHeader, MobileTabBar } from "@/components/mobile-nav";
 import { KeyboardShortcuts } from "@/components/player/keyboard-shortcuts";
@@ -57,6 +58,7 @@ export default async function AppLayout({
         <PlaybackEngines />
         <KeyboardShortcuts />
         <RadioController />
+        <AnalyticsProvider />
       </div>
     </RadioConfigProvider>
   );

@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { getAnalytics } from "@/lib/analytics";
 import { ErrorNote, Loading, Screen } from "@/components/screen";
 import { SectionHeader } from "@/components/section-header";
 import {
@@ -25,6 +27,24 @@ export default function SettingsScreen() {
   const autoplay = usePlayer((s) => s.autoplay);
   const setAutoplay = usePlayer((s) => s.setAutoplay);
 
+  // `null` cho tới khi đọc xong AsyncStorage — hiện sẵn "bật" rồi lật sang "tắt" ngay
+  // trước mắt người đã tắt nó là kiểu nhấp nháy khiến người dùng mất tin.
+  const [telemetry, setTelemetry] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const analytics = getAnalytics();
+    void analytics.init().then(() => setTelemetry(analytics.isEnabled()));
+  }, []);
+
+  const toggleTelemetry = (value: boolean) => {
+    setTelemetry(value);
+    const analytics = getAnalytics();
+    void analytics.setEnabled(value);
+    // Chỉ ghi nhận lúc bật lại; gửi một sự kiện ngay sau khi người dùng vừa tắt thu
+    // thập là làm đúng thứ họ vừa từ chối.
+    if (value) analytics.track("setting_change", { key: "telemetry", value: "on" });
+  };
+
   return (
     <Screen scroll refreshing={loading} onRefresh={reload}>
       <View style={styles.section}>
@@ -39,6 +59,26 @@ export default function SettingsScreen() {
           <Switch
             value={autoplay}
             onValueChange={setAutoplay}
+            trackColor={{ true: colors.accent, false: colors.surfaceElevated }}
+            thumbColor={colors.text}
+          />
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader label="Riêng tư" />
+        <View style={styles.row}>
+          <View style={styles.rowBody}>
+            <Text style={styles.rowTitle}>Gửi số liệu ẩn danh</Text>
+            <Text style={styles.rowMeta}>
+              Giúp biết tính năng nào thật sự được dùng. Không gửi từ khoá tìm
+              kiếm, không gửi tên bài hát, không gắn với tài khoản của bạn.
+            </Text>
+          </View>
+          <Switch
+            value={telemetry ?? false}
+            disabled={telemetry === null}
+            onValueChange={toggleTelemetry}
             trackColor={{ true: colors.accent, false: colors.surfaceElevated }}
             thumbColor={colors.text}
           />

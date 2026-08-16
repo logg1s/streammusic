@@ -11,6 +11,7 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { AnalyticsProvider } from "@/components/analytics-provider";
 import { PlaybackEngine } from "@/components/player/playback-engine";
 import { PlayerBar } from "@/components/player/player-bar";
 import { useSession } from "@/lib/api";
@@ -45,6 +46,7 @@ export default function RootLayout() {
           làm nó remount, nếu không tiếng đứt giữa bài. Nó tự render null.
         */}
         <PlaybackEngine />
+        <AnalyticsProvider />
         <SessionGate />
       </ThemeProvider>
     </SafeAreaProvider>
