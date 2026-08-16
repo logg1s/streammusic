@@ -7,6 +7,7 @@ import {
   splitArtistTitle,
 } from "@vong/shared";
 import { LANGUAGE_CODE, REGION_CODE } from "@/lib/youtube/locale";
+import { interleaveHits } from "@/lib/youtube/merge";
 import { innertube } from "@/lib/youtube/resolve";
 import { upsertYoutubeTracks } from "@/lib/youtube/store";
 import { toPlayableTrack } from "@vong/shared";
@@ -172,23 +173,9 @@ export async function searchTracks(
     }),
   ]);
 
-  // Xen kẽ luân phiên thay vì nối đuôi: nếu đổ hết catalog trước, một từ khoá mà YT Music
-  // có sẵn sẽ đẩy toàn bộ kết quả YouTube thường ra khỏi trang — đúng thứ người dùng thấy
-  // thiếu. Xen kẽ để cả hai nguồn luôn có mặt, bài catalog (metadata sạch) vẫn đứng đầu.
-  const seen = new Set<string>();
-  const merged: MusicHit[] = [];
-  for (let i = 0; merged.length < limit; i++) {
-    const next = [songs[i], videos[i]].filter(
-      (hit): hit is MusicHit => hit !== undefined,
-    );
-    if (i >= songs.length && i >= videos.length) break;
-    for (const hit of next) {
-      if (merged.length >= limit || seen.has(hit.videoId)) continue;
-      seen.add(hit.videoId);
-      merged.push(hit);
-    }
-  }
-  return merged;
+  // Catalog (metadata sạch) đứng trước ở mỗi cặp, YouTube thường phủ rộng — xem
+  // `interleaveHits`.
+  return interleaveHits(songs, videos, limit);
 }
 
 /**

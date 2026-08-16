@@ -11,6 +11,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p packages/shared/tsconfig.json",
     "check:youtube": "tsx scripts/check-player-request.mts",
     "tauri": "tauri",
@@ -59,6 +61,7 @@
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
