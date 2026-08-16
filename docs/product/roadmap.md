@@ -24,6 +24,13 @@ in the change log at the bottom.
 
 ## Shipped
 
+**v0.3.1 — 2026-08-16** ([release](https://github.com/logg1s/streammusic/releases/tag/v0.3.1))
+
+The instrumentation release. No user-visible change; its entire purpose is that the
+telemetry written after the v0.3.0 tag now exists in the builds people actually run.
+Windows gets it via the remote `frontendDist`, so the web deploy — not the installer —
+is what switches that shell on.
+
 **v0.3.0 — 2026-08-16** ([release](https://github.com/logg1s/streammusic/releases/tag/v0.3.0))
 
 1. **Android gapless in-app next** — the bridge routes to native `skipNext` when the
@@ -49,13 +56,19 @@ people guessing.
 - [x] All 11 events wired on web, Android and Windows. Playback events are derived from
       the player store by a shared subscriber rather than called from inside the engines —
       the engines are where invariant 1 lives and where the tripwire is blind
-- [x] `analytics_events` live in production, ingest smoke-tested end to end
+- [x] `analytics_events` live in production, ingest verified end to end against the
+      production origin on 2026-08-16 — POST returns 204, the row lands, and the test row
+      was deleted afterwards. Before that check the table held **zero rows**, so the
+      earlier "smoke-tested" claim in this file was not backed by anything
 - [x] **v0.3.1 shipped on all three shells.** Every telemetry commit landed *after* the
       v0.3.0 tag, so the binaries users actually had emitted nothing. The baseline clock
       starts at this release, not at the merge
 - [x] Google Play Data safety declaration updated for the 11 events
-- [ ] Confirm real device events reach `analytics_events` — a smoke test from a dev
-      machine is not proof that a shipped Android build reports
+- [ ] Confirm a **real Android device** reaches `analytics_events`. Still open: the
+      release APK is arm64-only and the only AVD here is x86_64, so it could not be
+      exercised on this machine. What *is* verified is that the shipped bundle contains
+      all 11 event names and the `/api/events` endpoint, and that the endpoint ingests
+      correctly — the untested link is the device itself
 - [ ] Finer `origin` than radio-vs-queue (search / recent / album / playlist) — needs work
       at each play call site, deferred until the coarse split proves insufficient
 - [ ] Four weekly reviews to establish baselines
@@ -81,3 +94,4 @@ Once `resolve_fail` has a baseline, decide whether it needs a fallback path.
 | --- | --- | --- |
 | 2026-08-16 | Roadmap moved out of assistant memory into the repo | An unreadable roadmap cannot be contributed to |
 | 2026-08-16 | Instrumentation inserted ahead of new features | Four stages shipped with no way to tell if they worked |
+| 2026-08-16 | Baseline clock starts at the v0.3.1 release, not at the telemetry merge | Merging an emitter changes nothing until a build carrying it reaches a device; `analytics_events` held zero rows |

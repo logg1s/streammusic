@@ -37,6 +37,10 @@ curl -s -X POST -H "content-type: application/json" -d '{}' \
   breaks both apps' UI instantly. The web UI **is** their UI.
 - Env vars live in Vercel project settings; `vercel env pull .env.local --yes`
   syncs locally.
-- Database schema changes: `npm run db:push` runs against `DATABASE_URL` in
-  `.env.local` — the same Neon DB production uses.
+- Database schema changes: `npm run db:generate` then `npm run db:migrate`, against
+  `DATABASE_URL` in `.env.local` — **the same Neon DB production uses**, so a bad
+  migration is a production incident, not a local one.
+  **Never `db:push`.** It is banned in `AGENTS.md`: it leaves no migration file and
+  will drop a column to settle a diff, and mixing it with `db:migrate` breaks the
+  journal with a silent non-zero exit (see `ba9e1c0`, which had to repair exactly that).
 - Check status/logs: `npx vercel ls streammusic`, `npx vercel inspect <url>`.
