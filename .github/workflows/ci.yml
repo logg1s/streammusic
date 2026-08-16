@@ -1,5 +1,8 @@
-# CI: typecheck + lint cho mọi push/PR vào master.
+# CI: typecheck + lint + test + clippy + năm ràng buộc cứng, cho mọi push/PR vào master.
 # Build nặng (APK, installer) nằm ở release.yml, chỉ chạy khi gắn tag.
+#
+# Tách thành bốn job chạy song song để PR hỏng ở đâu thì đỏ đúng ở đó: người sửa web
+# không phải đọc log của Rust, và job Rust chậm không giữ chân ba job kia.
 name: CI
 
 on:
@@ -8,7 +11,8 @@ on:
   pull_request:
 
 jobs:
-  check:
+  # Web + gói dùng chung: typecheck, lint, và 74 bài vitest.
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,9 +23,74 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npx eslint .
+      - run: npm test
+
+  # Mobile có tsconfig/eslint riêng, nhưng vẫn là một workspace nên phải `npm ci` ở gốc.
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Typecheck mobile
         run: npx tsc --noEmit
         working-directory: mobile
       - name: Lint mobile
         run: npx eslint .
         working-directory: mobile
+
+  # Clippy chạy trên windows-latest chứ không phải ubuntu, có lý do:
+  # souvlaki (SMTC) và backend audio chỉ biên dịch ra mã Windows, còn trên Linux thì
+  # tauri/rodio đòi webkit2gtk + alsa — cài chúng chỉ để lint một nhánh mã không bao giờ
+  # ship. Đây cũng đúng nền mà release.yml dùng để build installer.
+  # Cache của swatinem giữ cả registry lẫn target/; lần chạy nguội tốn ~6-8 phút, các
+  # lần sau ~1-2 phút. Job này song song với ba job kia nên không kéo dài CI tổng thể.
+  rust:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: src-tauri
+
+  # Năm ràng buộc cứng trong AGENTS.md, chạy bằng script tripwire.
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 là bắt buộc. Script bỏ qua luật "mobile/android/ là sinh tự động"
+      # trong im lặng khi không phân giải được ref gốc, nên checkout nông sẽ cho một job
+      # xanh mà chẳng kiểm gì.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Tính điểm gốc và bắt lỗi to nếu không có. So với merge-base chứ không phải đỉnh
+      # nhánh gốc: nếu không, mọi thay đổi master có sau lúc rẽ nhánh đều bị tính là của
+      # PR này.
+      - name: Xác định ref gốc
+        id: base
+        shell: bash
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            base=$(git merge-base FETCH_HEAD HEAD)
+          else
+            base="${{ github.event.before }}"
+            # Push đầu tiên lên một nhánh không có 'before' thật (toàn số 0).
+            git rev-parse --verify --quiet "$base^{commit}" > /dev/null || base=HEAD~1
+          fi
+          git rev-parse --verify "$base^{commit}" > /dev/null
+          echo "ref=$base" >> "$GITHUB_OUTPUT"
+      - name: Kiểm ràng buộc cứng
+        run: node .claude/skills/invariant-check/scripts/check-invariants.mjs --diff ${{ steps.base.outputs.ref }}
