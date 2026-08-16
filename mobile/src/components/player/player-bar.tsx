@@ -2,8 +2,24 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Artwork } from "@/components/artwork";
+import { useSmoothTime } from "@/lib/use-smooth-time";
 import { colors, font, layout, radius, spacing } from "@/theme";
 import { useCurrentTrack, usePlayer } from "@/store/player";
+
+/**
+ * Vạch tiến độ mảnh, tách riêng để nội suy mượt (~60 fps) mà không dựng lại cả thanh
+ * phát mỗi khung hình — xem `useSmoothTime`.
+ */
+function MiniProgress() {
+  const smooth = useSmoothTime();
+  const duration = usePlayer((s) => s.duration);
+  const progress = duration > 0 ? Math.min(1, smooth / duration) : 0;
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+    </View>
+  );
+}
 
 /**
  * Thanh phát nhỏ, luôn thấy được khi có bài trong hàng đợi.
@@ -16,9 +32,6 @@ export function PlayerBar() {
   const track = useCurrentTrack();
   const isPlaying = usePlayer((s) => s.isPlaying);
   const isBuffering = usePlayer((s) => s.isBuffering);
-  const progress = usePlayer((s) =>
-    s.duration > 0 ? Math.min(1, s.currentTime / s.duration) : 0,
-  );
 
   // Hàng đợi rỗng thì không có gì để điều khiển.
   if (!track) return null;
@@ -30,9 +43,7 @@ export function PlayerBar() {
       accessibilityLabel={`Mở màn hình phát: ${track.title}`}
       onPress={() => router.push("/player")}
     >
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-      </View>
+      <MiniProgress />
 
       <View style={styles.row}>
         <Artwork url={track.coverUrl} name={track.title} size={44} />

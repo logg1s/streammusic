@@ -1,4 +1,3 @@
-import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -6,12 +5,12 @@ import {
   StyleSheet,
   Text,
   View,
-  type LayoutChangeEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Scrubber } from "@/components/player/scrubber";
 import { accentText, colors, font, radius, spacing } from "@/theme";
 import { useCurrentTrack, usePlayer } from "@/store/player";
 
@@ -40,42 +39,12 @@ export default function PlayerScreen() {
 
   const isPlaying = usePlayer((s) => s.isPlaying);
   const isBuffering = usePlayer((s) => s.isBuffering);
-  const currentTime = usePlayer((s) => s.currentTime);
-  const duration = usePlayer((s) => s.duration);
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
   const error = usePlayer((s) => s.error);
   const queue = usePlayer((s) => s.queue);
   const order = usePlayer((s) => s.order);
   const position = usePlayer((s) => s.position);
-
-  /** Bề rộng thanh tua, đo bằng `onLayout`: hệ responder chỉ cho toạ độ pixel. */
-  const widthRef = useRef(0);
-  const dragRef = useRef<number | null>(null);
-  /** Tỉ lệ đang kéo; null = không kéo, thanh tua chạy theo `currentTime`. */
-  const [dragRatio, setDragRatio] = useState<number | null>(null);
-
-  // Dùng thẳng hệ responder của View chứ không qua `PanResponder`: `PanResponder.create`
-  // phải chạy trong thân render (handler cần có sẵn lúc render để cắm vào view), tức là
-  // đóng gói ref vào một hàm dựng giữa render — đúng thứ `react-hooks/refs` cấm, và cấm
-  // có lý. Các hàm dưới đây là handler cảm ứng thật: chúng chỉ chạy khi có ngón tay, nên
-  // đọc ref trong đó là hợp lệ.
-  const applyRatio = (x: number) => {
-    const width = widthRef.current;
-    const ratio = width > 0 ? Math.min(1, Math.max(0, x / width)) : 0;
-    dragRef.current = ratio;
-    setDragRatio(ratio);
-  };
-
-  const endDrag = (commit: boolean) => {
-    const ratio = dragRef.current;
-    dragRef.current = null;
-    setDragRatio(null);
-    if (!commit || ratio === null) return;
-    // Qua store: `seek` mới tới được sink của engine native.
-    const store = usePlayer.getState();
-    store.seek(ratio * store.duration);
-  };
 
   if (!track) {
     return (
@@ -92,10 +61,6 @@ export default function PlayerScreen() {
       </View>
     );
   }
-
-  const shownTime = dragRatio === null ? currentTime : dragRatio * duration;
-  const ratio =
-    dragRatio ?? (duration > 0 ? Math.min(1, currentTime / duration) : 0);
 
   const header = (
     <View style={styles.header}>
@@ -131,32 +96,7 @@ export default function PlayerScreen() {
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <View
-        style={styles.scrubberHit}
-        onLayout={(event: LayoutChangeEvent) => {
-          widthRef.current = event.nativeEvent.layout.width;
-        }}
-        accessibilityRole="adjustable"
-        accessibilityLabel="Thanh tua"
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderGrant={(event) => applyRatio(event.nativeEvent.locationX)}
-        onResponderMove={(event) => applyRatio(event.nativeEvent.locationX)}
-        onResponderRelease={() => endDrag(true)}
-        onResponderTerminate={() => endDrag(false)}
-      >
-        <View style={styles.scrubberTrack}>
-          <View style={[styles.scrubberFill, { width: `${ratio * 100}%` }]} />
-        </View>
-        <View style={[styles.scrubberKnob, { left: `${ratio * 100}%` }]} />
-      </View>
-
-      <View style={styles.times}>
-        <Text style={styles.time}>{formatTime(shownTime)}</Text>
-        <Text style={styles.time}>
-          {duration > 0 ? formatTime(duration) : "--:--"}
-        </Text>
-      </View>
+      <Scrubber />
 
       <View style={styles.controls}>
         <Pressable
@@ -352,43 +292,6 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: font.sm,
     marginTop: spacing.sm,
-  },
-  scrubberHit: {
-    height: 36,
-    justifyContent: "center",
-    marginTop: spacing.lg,
-  },
-  scrubberTrack: {
-    height: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceElevated,
-    overflow: "hidden",
-  },
-  scrubberFill: {
-    height: 4,
-    backgroundColor: colors.accent,
-  },
-  scrubberKnob: {
-    position: "absolute",
-    width: 14,
-    height: 14,
-    marginLeft: -7,
-    borderRadius: radius.full,
-    backgroundColor: colors.text,
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  times: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  time: {
-    color: colors.subtle,
-    fontSize: font.xs,
-    fontVariant: ["tabular-nums"],
   },
   controls: {
     flexDirection: "row",

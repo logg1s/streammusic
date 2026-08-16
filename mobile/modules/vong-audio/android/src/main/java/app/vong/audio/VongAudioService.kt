@@ -7,6 +7,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
@@ -37,6 +38,15 @@ class VongAudioService : MediaSessionService() {
       .setMediaSourceFactory(
         // Đây là lý do tồn tại của cả module: mọi byte phải đi qua RangeForcingDataSource.
         DefaultMediaSourceFactory(this).setDataSourceFactory(RangeForcingDataSource.Factory()),
+      )
+      // Giữ 30 giây đã phát trong bộ đệm: tua LÙI trong khoảng đó là tức thì, không phải
+      // mở lại request tới googlevideo (mỗi lần mở lại là một quãng im chờ byte đầu). Tua
+      // TỚI ngoài đệm vẫn phải nạp, nhưng nghe lại đoạn vừa qua — thao tác hay gặp nhất
+      // khi rà bài — thì mượt hẳn.
+      .setLoadControl(
+        DefaultLoadControl.Builder()
+          .setBackBuffer(30_000, /* retainBackBufferFromKeyframe = */ true)
+          .build(),
       )
       .setAudioAttributes(
         AudioAttributes.Builder()
