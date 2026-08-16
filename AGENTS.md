@@ -38,6 +38,9 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 - Never hand-edit `mobile/android/` — it's generated; change config plugins in
   `mobile/plugins/` and re-run `npx expo prebuild`.
 - The keystore `mobile/credentials/vong-release.jks` is irreplaceable.
+- Schema changes go through `db:generate` + `db:migrate`. **Not `db:push`** — it
+  leaves no migration file and can drop a column to settle a diff; mixing the two
+  breaks `db:migrate` with an unhelpful silent non-zero exit. See CONTRIBUTING.
 
 ## Product process
 

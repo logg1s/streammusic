@@ -68,6 +68,32 @@ need Dropbox/OneDrive/YouTube credentials to contribute; those providers hide
 themselves from the UI when unconfigured, and `npm run seed:demo` gets you a
 working library without any OAuth at all.
 
+## Changing the database schema
+
+Edit `src/db/schema.ts`, then generate and apply a migration:
+
+```bash
+npm run db:generate    # writes drizzle/NNNN_*.sql from the schema diff
+npm run db:migrate     # applies pending migrations
+```
+
+**Use `db:migrate`, not `db:push`.** `db:push` diffs the schema straight onto
+the database without leaving a migration file, so the change exists on your
+machine and nowhere else — and it can drop a column to resolve a diff. It is
+a prototyping tool, not a deployment path.
+
+Mixing the two also breaks `db:migrate` in a way that is hard to read: pushed
+changes are never recorded in `drizzle.__drizzle_migrations`, so the next
+`db:migrate` tries to re-apply migrations whose objects already exist and
+fails with an unhelpful non-zero exit. If that happens, the fix is to record
+the already-applied migrations (their hash is the sha256 of the raw `.sql`
+file, and `created_at` is the `when` value from `drizzle/meta/_journal.json`)
+rather than to delete anything.
+
+Commit the generated `.sql` file and the updated `meta/` snapshot together
+with the schema change. A schema change without its migration is a change
+only you can run.
+
 ## Making changes
 
 - **Docs, commit messages, code comments you add: English.** User-facing UI
