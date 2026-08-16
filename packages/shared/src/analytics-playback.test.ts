@@ -30,6 +30,9 @@ function harness() {
         radioActive: false,
         radioSeedId: null,
         error: null,
+        advanceFailures: 0,
+        radioExhausted: false,
+        radioErrorKind: null,
         ...patch,
       }),
     noteRadioTrigger: playback.noteRadioTrigger,
@@ -138,6 +141,69 @@ describe("queue_end", () => {
     h.observe(TRACK_A);
     h.observe(TRACK_B);
     expect(h.named("queue_end")).toHaveLength(0);
+  });
+});
+
+describe("advance_failed", () => {
+  /**
+   * Ca này là toàn bộ lý do sự kiện tồn tại. Hàng đợi hết trong thực tế KHÔNG làm
+   * `trackId` thành null — bài cuối vẫn được chọn, chỉ là phía sau không còn gì. Trước
+   * khi có bộ đếm này, đường mã đó không phát ra một sự kiện nào, nên "bấm next không
+   * ăn" và "nghe xong rồi tắt" là hai dữ liệu giống hệt nhau.
+   */
+  it("bắn khi bấm next ở bài cuối mà hàng đợi không dài thêm", () => {
+    const h = harness();
+    h.observe(TRACK_A);
+    h.observe({ ...TRACK_A, currentTime: 100 });
+    h.observe(TRACK_B);
+    h.observe({ ...TRACK_B, currentTime: 100 });
+    h.observe({ ...TRACK_B, currentTime: 0, advanceFailures: 1 });
+
+    const [event] = h.named("advance_failed");
+    expect(event.props.reason).toBe("queue_end");
+    // 1, không phải 2: `depth` đếm số bài đã KẾT THÚC. Ở đây bài cuối vẫn đang được
+    // chọn — đó chính là đặc điểm của tình huống này — nên nó chưa được tính. Cộng
+    // thêm nó vào sẽ đếm trùng khi `play_end` của nó bắn sau đó.
+    expect(event.props.depth).toBe(1);
+  });
+
+  it("phân biệt được radio đã cạn với hàng đợi thường hết bài", () => {
+    const h = harness();
+    h.observe({ ...TRACK_A, radioActive: true, radioSeedId: "s1" });
+    h.observe({
+      ...TRACK_A,
+      radioActive: true,
+      radioSeedId: "s1",
+      radioExhausted: true,
+      advanceFailures: 1,
+    });
+
+    expect(h.named("advance_failed")[0].props.reason).toBe("radio_exhausted");
+  });
+
+  it("hết quota không bị đọc nhầm thành cạn kho gợi ý", () => {
+    // Một lần nạp bị 429 trả về lô rỗng, nên nó tới đây với `radioExhausted` bật lên
+    // y hệt trường hợp kho ứng viên thật sự cạn. Nếu hai cái này cùng ra một nhãn thì
+    // sau chu kỳ này không ai phân biệt được "bug cũ tái phát" với "hôm nay hết quota".
+    const h = harness();
+    h.observe({ ...TRACK_A, radioActive: true, radioSeedId: "s1" });
+    h.observe({
+      ...TRACK_A,
+      radioActive: true,
+      radioSeedId: "s1",
+      radioExhausted: true,
+      radioErrorKind: "quota",
+      advanceFailures: 1,
+    });
+
+    expect(h.named("advance_failed")[0].props.reason).toBe("quota");
+  });
+
+  it("không bắn khi bộ đếm đứng yên", () => {
+    const h = harness();
+    h.observe({ ...TRACK_A, advanceFailures: 3 });
+    h.observe({ ...TRACK_A, advanceFailures: 3, currentTime: 10 });
+    expect(h.named("advance_failed")).toHaveLength(0);
   });
 });
 

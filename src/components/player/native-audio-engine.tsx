@@ -7,7 +7,14 @@ import {
   type PlayableTrack,
   type YoutubeResolver,
 } from "@vong/shared";
-import { peekCurrentTrack, registerSink, useCurrentTrack, usePlayer } from "@/store/player";
+import {
+  peekCurrentTrack,
+  peekNextTrack,
+  registerSink,
+  useCurrentTrack,
+  usePlayer,
+} from "@/store/player";
+import { radioEngine } from "@/lib/radio-engine";
 
 /**
  * Engine phát nhạc khi app chạy trong vỏ Tauri (Windows).
@@ -28,6 +35,13 @@ import { peekCurrentTrack, registerSink, useCurrentTrack, usePlayer } from "@/st
 
 /** Xin lại token trước khi hết hạn ngần này — khỏi đứt giữa bài. */
 const TOKEN_MARGIN_MS = 60_000;
+
+/**
+ * Thôi thử lại sau ngần này bài lỗi liên tiếp. Giống hệt vỏ Android, và không phải cho
+ * đối xứng: một lô URL googlevideo hết hạn mà không có trần thì tự-nhảy-khi-lỗi đi hết
+ * hàng đợi trong vài giây, mỗi bước một lượt resolve InnerTube ngay trên máy.
+ */
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 interface TickPayload {
   posMs: number;
@@ -79,6 +93,19 @@ export function NativeAudioEngine() {
    * `playing: false`, `ended: true`. Nghe theo là UI nhảy bài vô hạn.
    */
   const loadingRef = useRef(false);
+  const failuresRef = useRef(0);
+  /**
+   * Số thứ tự lượt nạp. Tăng ở mỗi lượt; mỗi lượt giữ số của mình và bỏ cuộc ngay khi
+   * thấy số toàn cục đã nhích.
+   *
+   * Vì sao cần: `loadedRef`/`loadingRef` chỉ nói "có ai đó đang nạp", không nói "ai".
+   * Bấm Next hai lần thật nhanh cho hai lượt `loadTrack` chạy song song, không lượt nào
+   * huỷ lượt nào, và cả hai đều gọi tới `invoke("play_track")`. Rust nối sink mới vào
+   * mixer TRƯỚC khi dừng sink cũ, nên hai lượt chồng nhau không phải một vết nối mà là
+   * hai bài phát cùng lúc — bất biến 1, theo nghĩa đen nhất của nó. Kiểm tra sau MỌI
+   * `await`: mỗi điểm chờ là một chỗ để bài hiện tại đổi.
+   */
+  const loadSeqRef = useRef(0);
   /**
    * Đếm số lần phải nạp lại CÙNG một bài (lặp một bài). Không có nó, effect đổi bài
    * không chạy lại vì `trackId` không đổi, mà `seek(0)` thì vô nghĩa — sink của Rust đã
@@ -179,12 +206,19 @@ export function NativeAudioEngine() {
     // Khôi phục chỗ đang nghe sau khi mở lại app: chỉ dùng đúng một lần.
     const startSec = state.consumePendingSeek() ?? 0;
 
+    const seq = ++loadSeqRef.current;
+    /** Lượt nạp này đã bị một lượt mới hơn thay thế chưa. */
+    const stale = () => loadSeqRef.current !== seq;
+
     loadedRef.current = trackId;
     loadingRef.current = true;
     state.setBuffering(true);
 
     void loadTrack(item, startSec)
       .then(async () => {
+        // Lượt mới hơn đã cầm lái: bỏ lượt này. KHÔNG nhả khoá nạp — khoá thuộc về
+        // lượt mới, nhả hộ là mở cổng cho `tick`/`ended` của bài đã bỏ.
+        if (stale()) return;
         loadingRef.current = false;
         usePlayer.getState().setBuffering(false);
         // Rust phát ngay khi nạp; store đang tạm dừng thì bảo nó dừng theo.
@@ -193,8 +227,13 @@ export function NativeAudioEngine() {
           await invoke("pause");
         }
       })
-      .catch((error: unknown) => {
-        loadingRef.current = false;
+      .catch(async (error: unknown) => {
+        // Lỗi của một bài đã bị bỏ lại không được ghi đè lỗi, không được đếm vào
+        // `failuresRef`, và tuyệt đối không được nhảy bài thay lượt đang chạy.
+        if (stale()) return;
+        // KHÔNG nhả khoá nạp trước khi nhảy bài. `player://tick` và `player://ended`
+        // chỉ nhìn đúng cờ này; một `ended` của sink cũ lọt vào khe đó là `handleEnded`
+        // nhảy thêm một bài nữa — hai bài bị bỏ cho một lỗi.
         loadedRef.current = null;
         const store = usePlayer.getState();
         store.setBuffering(false);
@@ -203,6 +242,33 @@ export function NativeAudioEngine() {
             ? error.message
             : "Không phát được bài này trên máy này.",
         );
+
+        // Bài cũ vẫn đang phát: `play_track` chỉ `stop()` sink cũ SAU khi dựng xong
+        // decoder mới, nên mọi lối thoát lỗi đều để nó chạy tiếp. Không dừng ở đây thì
+        // cú `next()` bên dưới cho ra hai nguồn tiếng cùng lúc theo nghĩa đen — bất
+        // biến 1 — và người dùng nghe bài A trong khi màn hình ghi bài C.
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("stop");
+        // Dừng thì cứ dừng — im lặng chấp nhận được, phát nhầm bài thì không — nhưng
+        // nếu trong lúc chờ đã có lượt nạp mới thì việc nhảy bài là của lượt đó.
+        if (stale()) return;
+
+        failuresRef.current += 1;
+        const after = usePlayer.getState();
+        const item = peekCurrentTrack();
+        if (
+          failuresRef.current < MAX_CONSECUTIVE_FAILURES &&
+          item &&
+          peekNextTrack()
+        ) {
+          // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người.
+          // Thiếu dòng này thì mỗi bài không phát được bị ghi vào `radio_feedback`
+          // thành một cú skip vĩnh viễn — vỏ Windows trước nay sạch chuyện đó chỉ vì
+          // nó không hề tự nhảy bài, và đúng dòng này là thứ vừa lấy mất sự sạch đó.
+          radioEngine.noteError(item.id);
+          after.next();
+        }
+        loadingRef.current = false;
       });
   }, [trackId, reloadNonce, loadTrack]);
 
@@ -239,6 +305,10 @@ export function NativeAudioEngine() {
       await add("player://tick", (payload) => {
         const tick = payload as TickPayload;
         if (loadingRef.current) return;
+        // Bằng chứng duy nhất được chấp nhận là "bài này phát được": có tiếng và đồng
+        // hồ đã chạy. Reset theo "nạp xong" thì bộ đếm không bao giờ chạm trần trong
+        // đúng trường hợp nó sinh ra để chặn.
+        if (tick.playing && tick.posMs > 0) failuresRef.current = 0;
         const store = usePlayer.getState();
         // Rust chỉ biết thời lượng qua metadata gửi kèm; thiếu thì giữ lấy con số
         // trong hàng đợi, đừng trả 0 làm scrubber sập về đầu.

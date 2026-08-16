@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { LoginRequiredError, VideoUnplayableError } from "@vong/shared";
+import {
+  LoginRequiredError,
+  VideoUnplayableError,
+  type PlayableTrack,
+} from "@vong/shared";
 import {
   peekCurrentTrack,
   peekNextTrack,
@@ -7,9 +11,12 @@ import {
   useCurrentTrack,
   usePlayer,
 } from "@/store/player";
+import { forceRefreshSessionToken } from "@/lib/api";
+import { radioEngine } from "@/lib/radio-engine";
 import { toNativeItem } from "@/lib/resolve";
 import {
   VongAudio,
+  type VongAudioError,
   type VongAudioItem,
   type VongAudioState,
 } from "../../../modules/vong-audio";
@@ -35,7 +42,14 @@ import { RadioController } from "./radio-controller";
  * thêm một bài. Nên trong quãng đó mọi event native bị bỏ qua.
  */
 
-/** Thôi thử lại sau ngần này bài lỗi liên tiếp — mạng chết thì đừng đốt cả hàng đợi. */
+/**
+ * Thôi thử lại sau ngần này bài lỗi liên tiếp — mạng chết thì đừng đốt cả hàng đợi.
+ *
+ * "Liên tiếp" tính theo TIẾNG ĐÃ RA, không theo số lần nhảy bài: bộ đếm chỉ về 0 khi
+ * native báo đang phát ở giây > 0. Reset theo "đã nhảy được một bài" thì bộ đếm không
+ * bao giờ chạm trần trong đúng trường hợp nó sinh ra để chặn — một loạt bài resolve
+ * ngon nhưng phát là 403, mỗi lỗi lại nhảy một bài, mỗi cú nhảy lại reset bộ đếm.
+ */
 const MAX_CONSECUTIVE_FAILURES = 3;
 
 function messageOf(error: unknown): string {
@@ -69,6 +83,30 @@ export function PlaybackEngine() {
   /** Chặn hai lượt nối đuôi chồng nhau: store phát state mỗi ~400 ms. */
   const toppingRef = useRef(false);
   const failuresRef = useRef(0);
+  /**
+   * Bài đã được thử lại bằng token mới rồi. Một lần thôi: 401 lần hai nghĩa là phiên
+   * hỏng thật, thử mãi chỉ là một vòng lặp im lặng.
+   */
+  const retriedAuthRef = useRef<string | null>(null);
+  /**
+   * Bài đã được resolve lại URL rồi. Một lần thôi, cùng lý do với `retriedAuthRef`:
+   * 403 lần hai trên URL vừa xin xong nghĩa là video hỏng thật, không phải hết hạn.
+   *
+   * Tách khỏi `retriedAuthRef` chứ không dùng chung: một bài có thể ăn 401 rồi 403 vì
+   * hai thứ khác nhau hết hạn, và dùng chung một ô nhớ thì lần chữa thứ hai bị chặn oan.
+   */
+  const retriedUrlRef = useRef<string | null>(null);
+  /**
+   * Số thứ tự lượt nạp. Tăng ở MỌI lượt bắt đầu nạp bài; mỗi lượt giữ số của mình và
+   * bỏ cuộc ngay khi thấy số toàn cục đã nhích.
+   *
+   * Vì sao cần: `loadedRef`/`loadingRef` chỉ nói "có ai đó đang nạp", không nói "ai".
+   * Bấm Next hai lần thật nhanh cho hai lượt `toNativeItem` chạy song song, không lượt
+   * nào huỷ lượt nào, và lượt về TRƯỚC nhả khoá cho lượt về SAU ghi đè — hàng đợi native
+   * kết thúc bằng bài đã bị bỏ, trong khi store trỏ bài khác. Kiểm tra sau MỌI `await`,
+   * không chỉ sau cái đầu tiên: mỗi điểm chờ là một chỗ để bài hiện tại đổi.
+   */
+  const loadSeqRef = useRef(0);
   /**
    * Bơm để chạy lại effect nạp bài khi `trackId` KHÔNG đổi: hết hàng đợi thì native đã
    * cạn item, phải nạp lại chính bài đó ở giây 0 để nút phát còn tác dụng.
@@ -104,6 +142,10 @@ export function PlaybackEngine() {
     const current = peekCurrentTrack();
     if (!current || current.id !== trackId) return;
 
+    const seq = ++loadSeqRef.current;
+    /** Lượt nạp này đã bị một lượt mới hơn thay thế chưa. */
+    const stale = () => loadSeqRef.current !== seq;
+
     // Next liền mạch: bài mới CHÍNH LÀ đuôi đã resolve sẵn và đã nằm trong hàng đợi
     // native (effect 3 nối vào lúc bài trước đang chạy). Bấm Next trong app trước đây
     // đi qua đây và resolve lại + dựng lại MediaSource — đứt tiếng dù đã có sẵn. Thay
@@ -117,6 +159,7 @@ export function PlaybackEngine() {
       nextItemRef.current = null;
       void (async () => {
         await VongAudio.skipNext();
+        if (stale()) return;
         // Giữ đúng ý muốn phát: skipNext không đổi playWhenReady, đây chỉ là bảo hiểm.
         if (usePlayer.getState().isPlaying) await VongAudio.play();
       })();
@@ -136,9 +179,15 @@ export function PlaybackEngine() {
     void (async () => {
       try {
         const item = await toNativeItem(current);
+        // Lượt nạp mới hơn đã cầm lái: bỏ kết quả này đi, và KHÔNG nhả khoá nạp —
+        // khoá thuộc về lượt mới, nhả hộ là mở cổng cho event của hàng đợi cũ.
+        if (stale()) return;
         currentItemRef.current = item;
         await VongAudio.setQueue({ items: [item], startIndex: 0, positionSec });
-        failuresRef.current = 0;
+        if (stale()) return;
+        // KHÔNG reset `failuresRef` ở đây: nạp xong hàng đợi không phải bằng chứng là
+        // có tiếng. Đúng lớp lỗi mà bộ đếm phải chặn — URL resolve ngon rồi phát mới
+        // 403 — đi qua điểm này thành công mỗi lần. Bộ đếm về 0 ở listener `state`.
         loadingRef.current = false;
         const after = usePlayer.getState();
         after.setBuffering(false);
@@ -146,6 +195,9 @@ export function PlaybackEngine() {
         if (after.isPlaying) await VongAudio.play();
         else await VongAudio.pause();
       } catch (error) {
+        // Lỗi của một bài đã bị bỏ lại không được đụng vào bài đang nạp — nhất là
+        // không được đếm vào `failuresRef` hay nhảy bài.
+        if (stale()) return;
         loadingRef.current = false;
         loadedRef.current = null;
         currentItemRef.current = null;
@@ -159,6 +211,10 @@ export function PlaybackEngine() {
           failuresRef.current < MAX_CONSECUTIVE_FAILURES &&
           peekNextTrack()
         ) {
+          // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người.
+          // Thiếu dòng này, một bài không resolve được bị ghi vào `radio_feedback`
+          // thành "người dùng bỏ qua" — vĩnh viễn, theo tài khoản, không đường gỡ.
+          radioEngine.noteError(current.id);
           // `playTrackAt` trong `next()` tự xoá lỗi và phát tiếp.
           after.next();
         }
@@ -185,11 +241,20 @@ export function PlaybackEngine() {
       if (wantedId === nextIdRef.current) return;
 
       toppingRef.current = true;
+      const seq = loadSeqRef.current;
+      // Đuôi này thuộc về lượt nạp nào. Bài hiện tại đổi giữa chừng là cả cái đuôi vô
+      // nghĩa: ghi nó vào `nextIdRef` là gắn đuôi của một vị trí đã bỏ làm "bài kế liền
+      // mạch" của vị trí mới — đúng báo cáo "bấm Next ra nhầm bài".
+      const stale = () =>
+        loadSeqRef.current !== seq ||
+        loadingRef.current ||
+        currentItemRef.current !== current;
+
       void (async () => {
         try {
           const tail = wanted ? await toNativeItem(wanted) : null;
           // Trong lúc chờ resolve người dùng có thể đã đổi bài: bỏ kết quả cũ đi.
-          if (loadingRef.current || currentItemRef.current !== current) return;
+          if (stale()) return;
           nextItemRef.current = tail;
           nextIdRef.current = wantedId;
           await VongAudio.setQueue({
@@ -200,7 +265,9 @@ export function PlaybackEngine() {
         } catch {
           // Bài kế không resolve được: để đuôi trống (Next trên màn hình khoá sẽ không
           // nhảy được đúng bài đó, nhưng bài đang phát không bị ảnh hưởng). Vẫn ghi
-          // `nextIdRef` để thôi thử lại ở mỗi nhịp `state`.
+          // `nextIdRef` để thôi thử lại ở mỗi nhịp `state` — nhưng chỉ khi lượt này còn
+          // là lượt hiện hành, nếu không là xoá mất cái đuôi hợp lệ của lượt mới.
+          if (stale()) return;
           nextItemRef.current = null;
           nextIdRef.current = wantedId;
         } finally {
@@ -229,6 +296,13 @@ export function PlaybackEngine() {
   useEffect(() => {
     const onState = VongAudio.addListener("state", (state: VongAudioState) => {
       if (loadingRef.current) return;
+      // Bằng chứng DUY NHẤT được chấp nhận là "bài này phát được": có ý muốn phát và
+      // đồng hồ đã chạy. Xem ghi chú ở `MAX_CONSECUTIVE_FAILURES`.
+      if (state.playing && state.positionSec > 0) {
+        failuresRef.current = 0;
+        retriedAuthRef.current = null;
+        retriedUrlRef.current = null;
+      }
       const store = usePlayer.getState();
       // Chưa đọc được `moov` thì native trả 0; giữ lấy thời lượng đang có, đừng để
       // scrubber sập về 0.
@@ -239,9 +313,12 @@ export function PlaybackEngine() {
       store.setBuffering(state.buffering);
     });
 
-    const onEnded = VongAudio.addListener("ended", () => {
+    const onEnded = VongAudio.addListener("ended", ({ id }) => {
       if (loadingRef.current) return;
       const endedId = peekCurrentTrack()?.id ?? null;
+      // `ended` của một bài store đã rời khỏi: bỏ qua. Nghe theo là một cú nhảy bài
+      // không ai giải thích được — cùng một lớp lỗi với `error` gán nhầm bài.
+      if (id && id !== endedId) return;
       usePlayer.getState().handleEnded();
 
       const after = usePlayer.getState();
@@ -284,10 +361,138 @@ export function PlaybackEngine() {
       },
     );
 
+    /**
+     * Nạp lại đúng bài đang phát bằng thông tin vừa xin mới, giữ nguyên chỗ đang nghe.
+     *
+     * Một hàm cho cả hai lớp lỗi "hết hạn", vì cách chữa giống hệt nhau — chỉ khác ở
+     * thứ hết hạn:
+     * - `refreshAuth` (401, bài thư viện): token của Vọng nướng trong header của item.
+     * - `!refreshAuth` (403, bài YouTube): URL googlevideo. `toNativeItem` luôn resolve
+     *   lại chứ không có cache, nên chỉ cần gọi lại là có URL mới.
+     *
+     * Hai lần `setQueue` chứ không một: sau lỗi, item hỏng vẫn là item hiện tại của
+     * ExoPlayer và player đang ở `STATE_IDLE`. `setQueue` với cùng `mediaId` đi vào
+     * nhánh `replaceAround` — giữ nguyên item cũ, không `prepare()` — nên nó sẽ nạp lại
+     * đúng cái xác đó. Hàng đợi rỗng làm native `stop()` + `clearMediaItems()`, lần gọi
+     * sau mới thật sự dựng lại `MediaSource` và `prepare()`.
+     */
+    const reloadCurrent = async (track: PlayableTrack, refreshAuth: boolean) => {
+      // Nạp lại cũng là một lượt nạp: nó phải giành được quyền cầm lái, và phải chịu
+      // bị một lượt mới hơn (người dùng bấm Next) hất ra như mọi lượt khác.
+      const seq = ++loadSeqRef.current;
+      const stale = () => loadSeqRef.current !== seq;
+
+      loadingRef.current = true;
+      const store = usePlayer.getState();
+      store.setBuffering(true);
+      const positionSec = store.currentTime;
+      try {
+        if (refreshAuth) {
+          const token = await forceRefreshSessionToken();
+          if (stale()) return;
+          if (!token) throw new Error("Phiên đăng nhập đã hết hạn.");
+        }
+        const item = await toNativeItem(track);
+        // Người dùng có thể đã đổi bài trong lúc chờ mạng: bỏ kết quả cũ đi. Lượt mới
+        // sở hữu khoá nạp nên KHÔNG nhả hộ; chỉ khi không có lượt nào khác (bài vẫn là
+        // bài này mà id đã đổi thì cũng không còn ai nạp) mới phải tự dọn.
+        if (stale()) return;
+        if (peekCurrentTrack()?.id !== track.id) {
+          loadingRef.current = false;
+          usePlayer.getState().setBuffering(false);
+          return;
+        }
+
+        currentItemRef.current = item;
+        nextIdRef.current = null;
+        nextItemRef.current = null;
+        loadedRef.current = track.id;
+        await VongAudio.setQueue({ items: [], startIndex: 0, positionSec: 0 });
+        if (stale()) return;
+        await VongAudio.setQueue({ items: [item], startIndex: 0, positionSec });
+        if (stale()) return;
+        loadingRef.current = false;
+        const after = usePlayer.getState();
+        after.setBuffering(false);
+        if (after.isPlaying) await VongAudio.play();
+      } catch (error) {
+        if (stale()) return;
+        loadingRef.current = false;
+        loadedRef.current = null;
+        currentItemRef.current = null;
+        failuresRef.current += 1;
+        const after = usePlayer.getState();
+        after.setBuffering(false);
+        after.setError(messageOf(error));
+        if (failuresRef.current < MAX_CONSECUTIVE_FAILURES && peekNextTrack()) {
+          radioEngine.noteError(track.id);
+          after.next();
+        }
+      }
+    };
+
+    /**
+     * Lỗi phát từ ExoPlayer. Trước đây native nuốt hẳn sự kiện này: nhạc lặng đi, cờ
+     * phát tắt, không lời nhắn, không nhảy bài.
+     *
+     * Ba điều kiện trước khi làm gì: đang nạp thì bỏ qua (như ba listener kia), lỗi
+     * của bài đã bị bỏ lại thì bỏ qua (lỗi và cú đổi bài chạy đua với nhau thật), và
+     * KHÔNG bao giờ tự đi hỏi URL từ JS — mọi request byte phải đi qua
+     * `RangeForcingDataSource`, hỏi thẳng từ đây là thiếu `Range` và ăn 403.
+     */
+    const onError = VongAudio.addListener("error", (error: VongAudioError) => {
+      if (loadingRef.current) return;
+      const current = peekCurrentTrack();
+      if (!current) return;
+      if (error.id && error.id !== current.id) return;
+
+      // 401 trên bài thư viện = token trong hàng đợi native đã hết hạn, KHÔNG phải bài
+      // hỏng. `toNativeItem` nướng header vào item lúc resolve, nên một bài nằm ở đuôi
+      // suốt một bài dài có thể mang token đã chết khi ExoPlayer mở request. Nhảy bài ở
+      // đây là cả hàng đợi thư viện trôi qua trong im lặng — đúng triệu chứng mà cả
+      // chu kỳ này sinh ra để xoá, chỉ đổi nguyên nhân.
+      if (
+        error.httpCode === 401 &&
+        current.source === "library" &&
+        retriedAuthRef.current !== current.id
+      ) {
+        retriedAuthRef.current = current.id;
+        void reloadCurrent(current, true);
+        return;
+      }
+
+      // 403 trên bài YouTube = URL googlevideo đã hết hạn, KHÔNG phải video hỏng. URL
+      // sống ~6h còn hàng đợi native giữ sẵn bài kế, nên một bài nằm ở đuôi qua một
+      // phiên nghe dài — hoặc app bị treo nền rồi mở lại — mở request bằng URL đã chết.
+      //
+      // Đây là lớp lỗi mà `httpCode` được kéo lên từ Kotlin để phân biệt: nhảy bài ở
+      // đây là bỏ một bài hoàn toàn tốt, và nếu cả lô cùng hết hạn thì là bỏ cả lô.
+      // Resolve lại rẻ hơn nhiều so với việc đốt hàng đợi.
+      if (
+        error.httpCode === 403 &&
+        current.source === "youtube" &&
+        retriedUrlRef.current !== current.id
+      ) {
+        retriedUrlRef.current = current.id;
+        void reloadCurrent(current, false);
+        return;
+      }
+
+      failuresRef.current += 1;
+      const store = usePlayer.getState();
+      store.setError(error.message);
+      if (failuresRef.current < MAX_CONSECUTIVE_FAILURES && peekNextTrack()) {
+        // Của máy, không phải của người — xem ghi chú ở đường resolve hỏng.
+        radioEngine.noteError(current.id);
+        store.next();
+      }
+    });
+
     return () => {
       onState.remove();
       onEnded.remove();
       onTrackChanged.remove();
+      onError.remove();
     };
   }, []);
 

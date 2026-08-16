@@ -1,95 +1,26 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { REFILL_THRESHOLD, autoplaySeed } from "@vong/shared";
-import type { PlayableTrack, PlayedTrack } from "@vong/shared";
-import { getPlaybackAnalytics } from "@/lib/analytics";
-import { refillRadio, reportPlayed, startRadioFor } from "@/lib/radio-client";
-import { usePlayer, type PlayerState } from "@/store/player";
+import { useEffect } from "react";
+import { radioEngine } from "@/lib/radio-engine";
+import { usePlayer } from "@/store/player";
 
 /**
- * Bộ não của "playlist linh hoạt": theo dõi hàng đợi, nạp thêm bài trước khi hết,
- * và báo về server bài nào bị bỏ qua sớm.
+ * Cầu nối giữa store và bộ não radio.
  *
- * Không render gì. Đặt trong layout để sống suốt phiên, giống KeyboardShortcuts —
- * hàng đợi phải tự dài ra kể cả khi người dùng đang ở trang khác.
+ * Toàn bộ quyết định — khi nào nạp thêm, lùi bao lâu sau lỗi, khi nào xoay seed, khi
+ * nào tự bật radio — nằm ở `createRadioEngine` trong `@vong/shared`, không nằm ở đây.
+ * Trước đây nó nằm trong chính component này, với một bản chép tay trong app Android;
+ * hai bản đã lệch nhau ở đường xử lý lỗi, và không bản nào test được vì cả hai đều là
+ * component. Component này giờ chỉ còn làm đúng việc của một component: gắn vào vòng
+ * đời React và tháo ra khi unmount.
  *
- * Ngưỡng nạp thêm và cách tính "nghe hết" nằm ở `@vong/shared`: app mobile chạy đúng
- * logic này, lệch nhau là lịch sử nghe của cùng một người trôi khác nhau theo thiết bị.
+ * Không render gì. Đặt trong layout để sống suốt phiên — hàng đợi phải tự dài ra kể
+ * cả khi người dùng đang ở trang khác.
  */
-
-function snapshot(track: PlayableTrack): PlayedTrack {
-  return {
-    id: track.id,
-    source: track.source,
-    videoId: track.youtubeVideoId,
-    artistName: track.artistName,
-    durationSec: track.durationSec,
-    time: 0,
-  };
-}
-
 export function RadioController() {
-  /** Chặn hai request chồng nhau: store phát state nhiều lần trong lúc chờ mạng. */
-  const refillingRef = useRef(false);
-  /** Chặn nhiều lần tự-khởi-động radio trong lúc lô đầu đang về. */
-  const startingRef = useRef(false);
-  const lastRef = useRef<PlayedTrack | null>(null);
-
   useEffect(() => {
-    const refill = async (seedId: string, exclude: string[]) => {
-      refillingRef.current = true;
-      try {
-        await refillRadio(seedId, exclude);
-      } finally {
-        refillingRef.current = false;
-      }
-    };
-
-    const handle = (state: PlayerState) => {
-      const track = state.queue[state.order[state.position]] ?? null;
-
-      const last = lastRef.current;
-      if (last?.id !== track?.id) {
-        if (last) reportPlayed(last);
-        lastRef.current = track ? snapshot(track) : null;
-      } else if (last) {
-        last.time = state.currentTime;
-      }
-
-      const { radio, order, position, queue } = state;
-      if (
-        radio &&
-        !radio.exhausted &&
-        radio.status !== "loading" &&
-        !refillingRef.current &&
-        order.length - 1 - position <= REFILL_THRESHOLD
-      ) {
-        void refill(
-          radio.seedId,
-          queue.map((t) => t.id),
-        );
-      }
-
-      // Autoplay: hàng đợi thường sắp hết → biến nó thành radio để nghe không đứt.
-      // `startRadioFor(seed)` giữ nguyên bài đang phát (seed CHÍNH là nó) rồi nối lô đầu;
-      // từ đó nhánh refill ở trên tự lo phần còn lại.
-      if (!startingRef.current && !refillingRef.current) {
-        const seed = autoplaySeed(state);
-        if (seed) {
-          // Store không phân biệt được radio tự bật với radio do người dùng bấm, mà đó
-          // lại chính là con số kiểm chứng quyết định autoplay-mặc-định.
-          getPlaybackAnalytics()?.noteRadioTrigger("autoplay");
-          startingRef.current = true;
-          void startRadioFor(seed).finally(() => {
-            startingRef.current = false;
-          });
-        }
-      }
-    };
-
-    handle(usePlayer.getState());
-    return usePlayer.subscribe(handle);
+    radioEngine.handle(usePlayer.getState());
+    return usePlayer.subscribe((state) => radioEngine.handle(state));
   }, []);
 
   return null;

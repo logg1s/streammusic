@@ -8,6 +8,7 @@ import {
   usePlayer,
 } from "@/store/player";
 import { reportBlocked } from "@/lib/radio-client";
+import { radioEngine } from "@/lib/radio-engine";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,6 +43,9 @@ const AUTOPLAY_CHECK_MS = 1500;
  * mọi khoảng người dùng kịp bấm tạm dừng trong iframe.
  */
 const LOAD_GATE_MS = 4000;
+
+/** Thôi thử lại sau ngần này bài lỗi liên tiếp. Giống hệt vỏ Windows và Android. */
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 const YT_STATE = {
   UNSTARTED: -1,
@@ -101,6 +105,15 @@ export function YouTubeEngine() {
   const loadingRef = useRef(false);
   /** Lưới an toàn: nạp hỏng không bao giờ báo gì thì cũng phải mở lại cổng. */
   const loadGuardRef = useRef(0);
+  /**
+   * Số bài lỗi liên tiếp. Về 0 chỉ khi player báo PLAYING — tức là đã ra tiếng thật.
+   *
+   * Trần này thiếu ở đây trong khi vỏ Windows và Android đều đã có. Hậu quả không phải
+   * lý thuyết: `onError` tự nhảy bài, nên một quãng mạng kém đi hết hàng đợi trong vài
+   * giây và ghi `reportBlocked` cho MỌI video nó lướt qua — tức là dạy sai mô hình gợi
+   * ý ở quy mô lớn, đúng thứ mà `noteError` ngay bên dưới sinh ra để chặn.
+   */
+  const failuresRef = useRef(0);
 
   /** Ghi nhận đã ra lệnh nạp: mọi PAUSED/ENDED trong quãng này là của bài cũ. */
   const beginLoad = (id: string) => {
@@ -184,6 +197,8 @@ export function YouTubeEngine() {
                 endLoad();
                 player.setBuffering(false);
                 player.syncPlaying(true);
+                // Đã ra tiếng: chuỗi lỗi đứt ở đây.
+                failuresRef.current = 0;
                 break;
               case YT_STATE.CUED:
                 endLoad();
@@ -210,6 +225,17 @@ export function YouTubeEngine() {
             const current = peekCurrentTrack();
             if (current?.source !== "youtube" || !current.youtubeVideoId)
               return;
+            // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người.
+            // Thiếu dòng này thì mỗi lỗi nhúng ghi 2 skip video + 2 skip nghệ sĩ vào
+            // `radio_feedback` — đủ để xoá vĩnh viễn một nghệ sĩ khỏi mọi radio tương
+            // lai chỉ từ MỘT video hỏng. Một phiên mạng kém từng đốt 47 video và 7
+            // nghệ sĩ của tài khoản chính trong 63 giây theo đúng cách này.
+            radioEngine.noteError(current.id);
+            failuresRef.current += 1;
+            // Chạm trần thì dừng hẳn — và KHÔNG `reportBlocked`. Quá ngần này bài liên
+            // tiếp hỏng thì nguyên nhân gần như chắc chắn là phía mình (mất mạng, sập
+            // iframe API), không phải video bị chặn; ghi tiếp là vu oan cho cả một lô.
+            if (failuresRef.current >= MAX_CONSECUTIVE_FAILURES) return;
             reportBlocked(current.youtubeVideoId, current.artistName);
             usePlayer.getState().next();
           },

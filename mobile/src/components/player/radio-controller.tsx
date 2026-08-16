@@ -1,133 +1,41 @@
-import { useEffect, useRef } from "react";
-import {
-  REFILL_THRESHOLD,
-  autoplaySeed,
-  createRadioClient,
-  type PlayableTrack,
-  type PlayedTrack,
-  type PlayerState,
-} from "@vong/shared";
-import { getPlaybackAnalytics } from "@/lib/analytics";
-import { ORIGIN, getSessionToken } from "@/lib/api";
-import { playerStore, usePlayer } from "@/store/player";
+import { useEffect } from "react";
+import { primeAuth, radioEngine } from "@/lib/radio-engine";
+import { usePlayer, type PlayerState } from "@/store/player";
 
 /**
- * Bộ não của "playlist linh hoạt" trên máy: theo dõi hàng đợi, nạp thêm bài trước khi
- * hết, và báo về server bài nào bị bỏ qua sớm.
+ * Cầu nối giữa store và bộ não radio.
  *
- * Không render gì. `PlaybackEngine` mount nó để cả hai sống cùng một vòng đời — hàng
- * đợi phải tự dài ra kể cả khi người dùng đang ở tab khác.
+ * Toàn bộ quyết định — khi nào nạp thêm, lùi bao lâu sau lỗi, khi nào xoay seed, khi
+ * nào tự bật radio — nằm ở `createRadioEngine` trong `@vong/shared`, không nằm ở đây.
+ * Trước đây file này giữ một bản chép tay của logic đó, đối xứng với bản trong web;
+ * hai bản đã lệch nhau ở đường xử lý lỗi, và không bản nào test được vì cả hai đều là
+ * component. Cả hai vỏ giờ chạy đúng một bộ mã, và bộ mã đó có soak test.
  *
- * Ngưỡng nạp thêm và cách tính "nghe hết" nằm ở `@vong/shared`: web chạy đúng logic
- * này, lệch nhau là lịch sử nghe của cùng một người trôi khác nhau theo thiết bị.
+ * Không render gì. `PlaybackEngine` mount nó để hai thứ cùng vòng đời — nạp thêm bài
+ * chỉ có nghĩa khi có engine phát chúng.
  */
-
-/**
- * `Authorization` hiện tại, giữ ở dạng đồng bộ.
- *
- * `RadioClientOptions.authHeader` là hàm ĐỒNG BỘ (web chỉ cần cookie), còn token của
- * app nằm trong SecureStore — một lời gọi async. Nên phải có bản đệm này, được làm mới
- * lúc mount và mỗi lần đổi bài; đăng nhập giữa phiên nhờ đó cũng vào đúng lô kế tiếp.
- */
-let cachedAuth: string | null = null;
-
-async function primeAuth(): Promise<void> {
-  const token = await getSessionToken();
-  cachedAuth = token ? `Bearer ${token}` : null;
-}
-
-/**
- * Lớp gọi API radio của vỏ Expo.
- *
- * `keepalive: false` — cờ đó chỉ có nghĩa trên web (giữ request sống khi tab đóng) và
- * `fetch` của React Native ném khi thấy nó.
- */
-const radio = createRadioClient(playerStore, {
-  baseUrl: ORIGIN,
-  authHeader: () => cachedAuth,
-  keepalive: false,
-});
-
-/** Màn hình nào cần "Radio từ bài này" thì dùng đúng client này, đừng tạo client thứ hai. */
-export const { startRadioFor, reportBlocked } = radio;
-
-const { refillRadio, reportPlayed } = radio;
-
-function snapshot(track: PlayableTrack): PlayedTrack {
-  return {
-    id: track.id,
-    source: track.source,
-    videoId: track.youtubeVideoId,
-    artistName: track.artistName,
-    durationSec: track.durationSec,
-    time: 0,
-  };
-}
-
 export function RadioController() {
-  /** Chặn hai request chồng nhau: store phát state nhiều lần trong lúc chờ mạng. */
-  const refillingRef = useRef(false);
-  /** Chặn nhiều lần tự-khởi-động radio trong lúc lô đầu đang về. */
-  const startingRef = useRef(false);
-  const lastRef = useRef<PlayedTrack | null>(null);
-
   useEffect(() => {
     void primeAuth();
 
-    const refill = async (seedId: string, exclude: string[]) => {
-      refillingRef.current = true;
-      try {
-        await refillRadio(seedId, exclude);
-      } finally {
-        refillingRef.current = false;
-      }
-    };
+    const currentId = (state: PlayerState) =>
+      state.queue[state.order[state.position]]?.id ?? null;
 
-    const handle = (state: PlayerState) => {
-      const track = state.queue[state.order[state.position]] ?? null;
+    const initial = usePlayer.getState();
+    radioEngine.handle(initial);
 
-      const last = lastRef.current;
-      if (last?.id !== track?.id) {
-        if (last) reportPlayed(last);
-        lastRef.current = track ? snapshot(track) : null;
-        // Đổi bài là mốc rẻ nhất để làm mới token: một lần đọc Keystore mỗi bài.
+    // Đổi bài là mốc rẻ nhất để làm mới token: một lần đọc Keystore mỗi bài. Đây là
+    // phần DUY NHẤT còn lại của vỏ — không phải quyết định radio, mà là chuyện
+    // `authHeader` của shared bắt buộc đồng bộ trong khi SecureStore thì không.
+    let lastId = currentId(initial);
+    return usePlayer.subscribe((state) => {
+      const id = currentId(state);
+      if (id !== lastId) {
+        lastId = id;
         void primeAuth();
-      } else if (last) {
-        last.time = state.currentTime;
       }
-
-      const { radio: radioState, order, position, queue } = state;
-      if (
-        radioState &&
-        !radioState.exhausted &&
-        radioState.status !== "loading" &&
-        !refillingRef.current &&
-        order.length - 1 - position <= REFILL_THRESHOLD
-      ) {
-        void refill(
-          radioState.seedId,
-          queue.map((t) => t.id),
-        );
-      }
-
-      // Autoplay: hàng đợi thường sắp hết → biến nó thành radio để nghe không đứt.
-      // `startRadioFor(seed)` giữ nguyên bài đang phát rồi nối lô đầu; nhánh refill lo tiếp.
-      if (!startingRef.current && !refillingRef.current) {
-        const seed = autoplaySeed(state);
-        if (seed) {
-          // Store không phân biệt được radio tự bật với radio do người dùng bấm, mà đó
-          // lại chính là con số kiểm chứng quyết định autoplay-mặc-định.
-          getPlaybackAnalytics().noteRadioTrigger("autoplay");
-          startingRef.current = true;
-          void startRadioFor(seed).finally(() => {
-            startingRef.current = false;
-          });
-        }
-      }
-    };
-
-    handle(usePlayer.getState());
-    return usePlayer.subscribe(handle);
+      radioEngine.handle(state);
+    });
   }, []);
 
   return null;

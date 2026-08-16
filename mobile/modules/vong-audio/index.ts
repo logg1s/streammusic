@@ -35,13 +35,32 @@ export interface VongAudioState {
   buffering: boolean;
 }
 
+/** Lỗi phát từ ExoPlayer. Xem `onPlayerError` trong `VongAudioModule.kt`. */
+export interface VongAudioError {
+  /** Bài mà native đang giữ lúc lỗi — có thể KHÁC bài JS đang hiển thị. */
+  id: string | null;
+  /** Tên mã của media3, ví dụ `ERROR_CODE_IO_BAD_HTTP_STATUS`. */
+  code: string;
+  message: string;
+  /** Mã HTTP nếu lỗi đến từ mạng; `null` khi không phải (decoder, mất mạng hẳn). */
+  httpCode: number | null;
+}
+
 export type VongAudioEvents = {
   /** Nhịp trạng thái, ~400 ms một lần khi đang phát. */
   state: (state: VongAudioState) => void;
-  /** Hết bài cuối trong hàng đợi native. */
-  ended: () => void;
+  /**
+   * Hết bài cuối trong hàng đợi native. `id` là bài native vừa chạy hết — JS bỏ qua
+   * nếu nó không còn là bài hiện tại.
+   */
+  ended: (event: { id: string | null }) => void;
   /** Player nhảy sang item khác (tự hết bài, hoặc người dùng bấm Next trên khoá máy). */
   trackChanged: (event: { index: number; id: string }) => void;
+  /**
+   * Phát hỏng. Bài KHÔNG tự nhảy ở phía native — JS quyết định làm lại hay đi tiếp,
+   * vì chỉ JS mới biết hàng đợi và mới làm mới được token.
+   */
+  error: (error: VongAudioError) => void;
 };
 
 declare class VongAudioModuleType extends NativeModule<VongAudioEvents> {

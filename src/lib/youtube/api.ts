@@ -135,6 +135,16 @@ async function call<T>(
       quotaExceeded = false;
     }
     if (quotaExceeded) {
+      // Đây là lần hết quota THẬT của Google, khác với ngân sách tự đặt trong
+      // `radio.ts`. Ngân sách nội bộ có log của nó; đường này thì trước đây đi thẳng
+      // ra 429 cho người dùng mà không để lại dấu vết nào ở đâu cả — không counter,
+      // không metric, không event (và cũng không thể có event: hệ đo hiện tại là
+      // pipeline ẩn danh phía client, còn đây là phía server). Nghĩa là cách duy nhất
+      // để biết đã hết quota là app hỏng, mà nó hỏng thành đúng một triệu chứng với
+      // việc cạn kho gợi ý. Một dòng log là thứ rẻ nhất phân biệt được hai cái đó.
+      console.error(
+        `[youtube] HẾT QUOTA THẬT (403 quotaExceeded) khi gọi ${path}`,
+      );
       throw new YoutubeQuotaError("Hết quota YouTube Data API trong ngày");
     }
   }

@@ -79,12 +79,18 @@ export type {
 } from "./player-store";
 
 export {
+  MAX_RESEED_ATTEMPTS,
+  RADIO_RETRY_CAP_MS,
   REFILL_THRESHOLD,
   autoplaySeed,
   createRadioClient,
+  radioRetryDelayMs,
 } from "./radio-client";
 export type {
+  PlayEndReason,
   PlayedTrack,
   RadioClient,
   RadioClientOptions,
 } from "./radio-client";
+export { createRadioEngine } from "./radio-engine";
+export type { RadioEngine, RadioEngineOptions } from "./radio-engine";

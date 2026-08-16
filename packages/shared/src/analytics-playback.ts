@@ -30,6 +30,12 @@ export interface PlaybackSnapshot {
   radioSeedId: string | null;
   /** Thông báo lỗi của store. KHÔNG bao giờ được gửi đi nguyên văn — xem `classify`. */
   error: string | null;
+  /** Bộ đếm "bấm next mà không đi đâu được" của store. Xem `advanceFailures`. */
+  advanceFailures: number;
+  /** Radio đã tuyên bố hết bài để gợi ý. */
+  radioExhausted: boolean;
+  /** Nhãn lỗi radio gần nhất. Tách "hết quota" khỏi "cạn kho ứng viên". */
+  radioErrorKind: "quota" | "network" | "other" | null;
 }
 
 /** Nghe dưới ngần này giây tính là bỏ sớm — tín hiệu trực tiếp cho "gợi ý sai". */
@@ -133,13 +139,43 @@ export function createPlaybackAnalytics(options: {
           depth += 1;
         }
 
-        // Hàng đợi chạy hết mà không nối tiếp được — chính là thứ autoplay sinh ra để
-        // ngăn, nên phải đếm.
+        // Hàng đợi bị xoá sạch. Hiếm, nhưng vẫn là một cách hàng đợi kết thúc.
         if (s.trackId === null && last.trackId !== null) {
-          analytics.track("queue_end", { depth });
+          analytics.track("queue_end", { depth, reason: "cleared" });
           depth = 0;
         }
+      }
 
+      // ── Bấm next mà không đi đâu được ──────────────────────────────────────
+      // Đây là cách hàng đợi kết thúc trong THỰC TẾ: bài cuối vẫn được chọn, chỉ là
+      // không còn gì phía sau. `trackId` không thành null, nên nhánh ở trên không bao
+      // giờ chạy — `queue_end` chưa từng bắn một lần nào trong đúng tình huống nó
+      // được đặt tên. Đó là lý do một người dùng bực vì bấm next không ăn và một
+      // người dùng nghe xong hài lòng cho ra dữ liệu giống hệt nhau.
+      if (s.advanceFailures > last.advanceFailures) {
+        // Thứ tự kiểm tra có chủ đích: hết quota được xét TRƯỚC. Một lần nạp bị 429
+        // trả về lô rỗng, và lô rỗng thì biểu hiện y hệt kho ứng viên đã cạn. Nếu
+        // không tách ra, bảng số liệu sau chu kỳ này sẽ hiện "hàng đợi vẫn chết" mà
+        // không ai biết đó là bug cũ tái phát hay chỉ là hết quota trong ngày — đúng
+        // kiểu gộp tín hiệu đã khiến sự cố ban đầu tàng hình.
+        const reason =
+          s.radioErrorKind === "quota"
+            ? "quota"
+            : s.radioExhausted
+              ? "radio_exhausted"
+              : s.radioActive
+                ? "radio_stalled"
+                : "queue_end";
+        analytics.track("advance_failed", {
+          reason,
+          depth,
+          queueLength: s.queueLength,
+        });
+        analytics.track("queue_end", { depth, reason });
+        depth = 0;
+      }
+
+      if (s.trackId !== last.trackId) {
         selectedAt = now();
         started = false;
       }

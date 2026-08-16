@@ -67,6 +67,14 @@ export interface PlayerState {
   pendingSeek: number | null;
   /** Radio đang chạy trên hàng đợi này; null khi hàng đợi là album/playlist thường. */
   radio: RadioState | null;
+  /**
+   * Đếm số lần `next()` được gọi mà không đi đâu được — bấm next, không có gì xảy ra.
+   *
+   * Là bộ đếm tăng dần chứ không phải cờ, vì telemetry đọc store qua subscription và
+   * một cờ bật/tắt sẽ bị bỏ lỡ giữa hai lần quan sát. Cố tình KHÔNG lưu xuống đĩa:
+   * đây là chuyện của phiên hiện tại, không phải trạng thái cần khôi phục.
+   */
+  advanceFailures: number;
 
   playQueue: (tracks: PlayableTrack[], startIndex?: number) => void;
   playTrackAt: (position: number) => void;
@@ -86,10 +94,13 @@ export interface PlayerState {
 
   startRadio: (seed: PlayableTrack) => void;
   stopRadio: () => void;
+  /** Đổi seed radio tại chỗ, giữ nguyên hàng đợi. Xem ghi chú ở phần cài đặt. */
+  rotateRadioSeed: (seed: PlayableTrack) => void;
   setRadioStatus: (
     status: RadioState["status"],
     exhausted?: boolean,
     message?: string | null,
+    errorKind?: RadioState["errorKind"],
   ) => void;
   /** Nối thêm bài vào cuối hàng đợi, bỏ bài đã có. */
   appendTracks: (tracks: PlayableTrack[]) => void;
@@ -184,6 +195,7 @@ export function createPlayerStore(
         autoplay: true,
         error: null,
         pendingSeek: null,
+        advanceFailures: 0,
         radio: null,
 
         playQueue(tracks, startIndex = 0) {
@@ -242,7 +254,16 @@ export function createPlayerStore(
             get().playTrackAt(0);
             return;
           }
-          set({ isPlaying: false, currentTime: 0 });
+          // Đây CHÍNH LÀ khoảnh khắc "bấm next mà không có gì xảy ra". Trước đây nó
+          // im lặng tuyệt đối: `queue_end` chỉ bắn khi `trackId` thành null, mà ở đây
+          // bài cuối vẫn đang được chọn — nên sự kiện mang đúng cái tên của tình
+          // huống này chưa từng bắn một lần nào trong chính tình huống đó. Người dùng
+          // bực bội và người dùng nghe xong hài lòng để lại dấu vết giống hệt nhau.
+          set({
+            isPlaying: false,
+            currentTime: 0,
+            advanceFailures: get().advanceFailures + 1,
+          });
         },
 
         previous() {
@@ -333,6 +354,7 @@ export function createPlayerStore(
             status: "loading",
             exhausted: false,
             message: null,
+            errorKind: null,
           };
           // Xáo và lặp đều đánh nhau với việc nạp thêm: repeat "all" quay về đầu hàng đợi
           // thay vì để RadioController kéo lô tiếp theo.
@@ -360,7 +382,34 @@ export function createPlayerStore(
           set({ radio: null });
         },
 
-        setRadioStatus(status, exhausted, message) {
+        rotateRadioSeed(seed) {
+          // Chuyển seed sang bài khác mà KHÔNG đụng tới hàng đợi.
+          //
+          // Tồn tại riêng vì `startRadio` không làm được việc này an toàn: nếu bài
+          // truyền vào không đúng bài đang phát, nó rơi xuống nhánh dưới và thay sạch
+          // queue/order/position — xoá hàng đợi giữa phiên nghe. Controller chạy trên
+          // subscription của store nên rất dễ cầm nhầm một bài đã cũ.
+          //
+          // Vì sao cần xoay seed: kho ứng viên phía server được cache theo seed và tối
+          // đa ~100 id. Nạp mãi bằng seed gốc là một phiên nghe có trần cứng. Nhưng
+          // xoay ở MỌI lần nạp thì mỗi lần nạp là một lần trượt cache, tức một lần đào
+          // InnerTube phía server — ~15 lần trong phiên 2 giờ thay vì 1, trên đúng dải
+          // IP vốn đã bị LOGIN_REQUIRED. Nên chỉ gọi khi lô về ngắn hoặc rỗng.
+          const radio = get().radio;
+          if (!radio || radio.seedId === seed.id) return;
+          set({
+            radio: {
+              ...radio,
+              seedId: seed.id,
+              seedLabel: seed.title,
+              exhausted: false,
+              status: "idle",
+              message: null,
+            },
+          });
+        },
+
+        setRadioStatus(status, exhausted, message, errorKind) {
           const radio = get().radio;
           if (!radio) return;
           set({
@@ -369,6 +418,8 @@ export function createPlayerStore(
               status,
               exhausted: exhausted ?? radio.exhausted,
               message: message ?? (status === "error" ? radio.message : null),
+              errorKind:
+                status === "error" ? (errorKind ?? radio.errorKind) : null,
             },
           });
         },

@@ -54,6 +54,26 @@ import { parseYoutubeTrackId, toPlayableTrack } from "@vong/shared";
  */
 const CANDIDATE_TTL_MS = 24 * 60 * 60 * 1000;
 /** Dưới ngưỡng này thì ứng viên quá mỏng — bù bằng nguồn kế tiếp. */
+/**
+ * Trần số seed được phép đào bằng YouTube Data API mỗi ngày, TOÀN DỰ ÁN.
+ *
+ * `search.list` có bucket riêng 100 lượt/ngày, dùng chung cho mọi người dùng — không
+ * phải mỗi người 100. Một lần đào tốn 1–2 lượt search, nên 40 seed/ngày để lại chỗ
+ * cho tìm kiếm của người dùng và cho việc đào lại.
+ *
+ * Vì sao trần này xuất hiện cùng lúc với việc xoay seed: kho ứng viên được cache theo
+ * seed, nên seed mới là một lần trượt cache. Xoay seed gỡ được trần phiên nghe, nhưng
+ * nếu để nó tự do thì một phiên 2 giờ đi từ 1 lần đào lên ~15 — tức là toàn dự án chỉ
+ * phục vụ nổi 3–7 phiên mỗi ngày. Đó không phải "hơi chật", đó là hỏng ở người dùng
+ * thứ hai. Trần này giữ việc xoay seed (vẫn chạy qua InnerTube, không tốn quota) mà
+ * bỏ phần đắt.
+ *
+ * Đếm theo số hàng `radio_seeds` được nạp hôm nay. Không chính xác tuyệt đối — upsert
+ * đè lên hàng cũ nên đây là ước lượng thiếu — nhưng nó là cái phanh, và một cái phanh
+ * hơi chặt thì tốt hơn không có phanh. Không cần migration.
+ */
+const DATA_API_DAILY_SEED_BUDGET = 40;
+
 const MIN_CANDIDATES = 20;
 const MAX_CANDIDATES = 100;
 /**
@@ -69,6 +89,12 @@ const TASTE_BOOST_KNOWN = 2;
 const TASTE_BOOST_LIKED_VIDEO = 3;
 const LIBRARY_ARTIST_BOOST = 1;
 const SKIPPED_ARTIST_PENALTY = -2;
+/**
+ * Bài từng bị bỏ qua, được nhận lại vì không đủ bài sạch. Phải đủ lớn để luôn xếp
+ * sau mọi ứng viên sạch — kể cả bài sạch đang bị phạt mỏi tai — nhưng vẫn là một con
+ * số, không phải sự loại bỏ.
+ */
+const SOFT_FLOOR_PENALTY = -50;
 /** Mỗi lô chèn tối đa 4 bài "gu thuần" của nghệ sĩ khác, để lô không thành một album. */
 const TASTE_FILL = 4;
 
@@ -295,8 +321,16 @@ async function digCandidates(
 
   const hasCredential = Boolean(accessToken ?? process.env.YOUTUBE_API_KEY);
   if (ids.size < MIN_CANDIDATES && hasCredential) {
-    for (const id of await digViaDataApi(artistQuery, used, accessToken)) {
-      ids.add(id);
+    if (await dataApiBudgetLeft()) {
+      for (const id of await digViaDataApi(artistQuery, used, accessToken)) {
+        ids.add(id);
+      }
+    } else {
+      // Không ném: thiếu ứng viên là "gợi ý nghèo hơn", hết quota giữa phiên là
+      // "radio chết" — mà đó đúng là thứ cả chu kỳ này đang đi sửa.
+      console.warn(
+        `[radio] bỏ qua Data API: đã chạm ngân sách ${DATA_API_DAILY_SEED_BUDGET} seed/ngày`,
+      );
     }
   }
   if (ids.size === 0) return [];
@@ -315,6 +349,26 @@ async function digCandidates(
       },
     });
   return candidateIds;
+}
+
+/**
+ * Còn ngân sách Data API cho hôm nay không.
+ *
+ * Cũng là toàn bộ khả năng quan sát mà ta có về quota: không có counter, không có
+ * metric, không có log ở đâu cả, và không thể có event telemetry vì đường đo hiện tại
+ * là pipeline ẩn danh phía client. Trước thay đổi này, cách duy nhất để biết đã hết
+ * quota là app hỏng — và nó hỏng thành đúng một triệu chứng với việc cạn kho ứng
+ * viên: radio ngừng ra bài. Hai nguyên nhân khác hẳn nhau, một triệu chứng, không có
+ * gì phân biệt được. Dòng log ở chỗ gọi là thứ rẻ nhất chữa được điều đó.
+ */
+async function dataApiBudgetLeft(): Promise<boolean> {
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const [row] = await getDb()
+    .select({ count: sql<number>`count(*)::int` })
+    .from(radioSeeds)
+    .where(gte(radioSeeds.fetchedAt, startOfDay));
+  return (row?.count ?? 0) < DATA_API_DAILY_SEED_BUDGET;
 }
 
 /**
@@ -576,28 +630,67 @@ async function rankCandidates(args: {
     target.set(row.subjectKey, { skips: row.skips, finishes: row.finishes });
   }
 
-  const kept = shortlist.filter((candidate) => {
-    const inLibrary = libraryEntries.some(
-      (entry) =>
-        entry.titleKey === candidate.titleKey &&
-        sameArtistKey(entry.artistKey, candidate.artistKey),
-    );
-    if (inLibrary) return false;
+  // Bài đã có trong thư viện thì loại thẳng: đó không phải phán xét về gu, mà là
+  // tránh gợi ý cho người ta thứ họ đã sở hữu. Loại này không có sàn mềm.
+  const notInLibrary = shortlist.filter(
+    (candidate) =>
+      !libraryEntries.some(
+        (entry) =>
+          entry.titleKey === candidate.titleKey &&
+          sameArtistKey(entry.artistKey, candidate.artistKey),
+      ),
+  );
+
+  /**
+   * Loại trừ theo feedback là VĨNH VIỄN, theo tài khoản, không TTL, không đường gỡ —
+   * `radio_feedback` không có cột seed và `updated_at` không được đọc ở đâu cả. Kho
+   * ứng viên của một seed thì hữu hạn (~48–100 id). Ghép hai thứ đó lại thì mỗi cú
+   * skip là một bước đếm ngược tới trạng thái chết, và một tài khoản dùng lâu sẽ cạn
+   * chắc chắn.
+   *
+   * Đo được trên production ngày 2026-08-16: một seed có kho 48 bài, tài khoản chính
+   * đã loại 46/48 — còn đúng 2 bài. Cùng seed đó, tài khoản không dính sự cố: loại 0.
+   *
+   * Nên đây là SÀN MỀM, không phải bộ lọc cứng: bài bị phạt vẫn được nhận lại, xếp
+   * chót, khi số bài sạch không đủ. Radio phát lại một bài từng bị bỏ qua thì hơi dở;
+   * radio không phát được gì nữa thì là hỏng. Hai cái đó không cùng hạng.
+   */
+  const isPenalised = (candidate: (typeof notInLibrary)[number]) => {
     const video = videoStats.get(candidate.videoId);
-    if (video && video.skips >= 1 && video.finishes === 0) return false;
-    const artist = artistStats.get(candidate.artistKey);
-    if (artist && artist.skips >= 2 && artist.finishes === 0) return false;
-    return true;
-  });
+    return Boolean(video && video.skips >= 1 && video.finishes === 0);
+  };
+
+  // Ngưỡng nghệ sĩ cũ (2 skip, 0 nghe hết → xoá mọi bài của họ, mãi mãi) đã bị bỏ.
+  // Hai bài khác nhau của cùng một người là đủ để xoá cả người đó, và `SKIPPED_ARTIST_PENALTY`
+  // bên dưới vốn đã diễn đạt cùng ý đó theo cách gỡ lại được. Vách đứng nằm cạnh một
+  // con dốc thoải cùng mục đích thì vách đứng là thừa.
+  const clean = notInLibrary.filter((candidate) => !isPenalised(candidate));
+  const penalised = notInLibrary.filter(isPenalised);
+
+  // Cần dư so với `limit` để phần xếp hạng và hạn mức mỗi nghệ sĩ còn chỗ xoay.
+  const kept =
+    clean.length >= limit * 2 ? clean : [...clean, ...penalised];
 
   // Khớp mờ như mọi chỗ khác: "MCK" trong play_events và "RPT MCK" trên YouTube là
   // một người, nên giữ danh sách phẳng rồi so từng khoá.
   const historyOf = (artistKey: string) =>
     history.find((row) => sameArtistKey(row.artistKey, artistKey)) ?? null;
 
+  // Khớp mờ, không khớp đúng. Ngưỡng xoá nghệ sĩ đã bị bỏ và `SKIPPED_ARTIST_PENALTY`
+  // là thứ thay thế nó — nhưng tra cứu bằng khoá chính xác thì nó trượt đúng những ca
+  // mà mọi chỗ khác trong file này đã xử lý bằng `sameArtistKey`: "MCK" trong
+  // play_events và "RPT MCK" trên YouTube là một người. Thay thế mà khớp hẹp hơn cái
+  // bị thay thì không phải là thay thế.
+  const artistStatOf = (artistKey: string) => {
+    for (const [key, value] of artistStats) {
+      if (sameArtistKey(key, artistKey)) return value;
+    }
+    return undefined;
+  };
+
   const scored: Scored[] = kept.map((candidate) => {
     const weight = taste.artists.get(candidate.artistKey)?.weight ?? 0;
-    const artist = artistStats.get(candidate.artistKey);
+    const artist = artistStatOf(candidate.artistKey);
     const played = historyOf(candidate.artistKey);
 
     // Điểm lịch sử nghe, suy giảm một nửa mỗi HISTORY_HALF_LIFE_DAYS ngày.
@@ -624,10 +717,14 @@ async function rankCandidates(args: {
         ? SKIPPED_ARTIST_PENALTY
         : 0) +
       historyScore +
-      (played && played.recent >= FATIGUE_PLAYS ? FATIGUE_PENALTY : 0);
+      (played && played.recent >= FATIGUE_PLAYS ? FATIGUE_PENALTY : 0) +
+      (isPenalised(candidate) ? SOFT_FLOOR_PENALTY : 0);
 
     // "Chưa biết" = chưa từng nghe trong app VÀ không có trong gu lấy từ tài khoản.
-    const explore = played === null && weight === 0;
+    // Bài đã bị bỏ qua thì không còn là khám phá nữa — người nghe đã nghe và đã từ
+    // chối. Để nó chiếm suất khám phá là dùng hạn mức "cho tôi nghe cái mới" để phát
+    // lại đúng thứ vừa bị loại.
+    const explore = played === null && weight === 0 && !isPenalised(candidate);
     return { candidate, score, explore };
   });
   scored.sort(

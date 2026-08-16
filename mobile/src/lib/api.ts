@@ -227,6 +227,23 @@ export async function getSessionToken(): Promise<string | null> {
 }
 
 /**
+ * Xin token mới NGAY, kể cả khi token đang giữ chưa tới hạn.
+ *
+ * `getSessionToken()` chỉ gia hạn khi sắp hết hạn, nên nó không cứu được trường hợp
+ * server từ chối một token trông vẫn còn hạn (máy chủ khởi động lại, phiên bị thu hồi,
+ * đồng hồ máy lệch). Vỏ native cần đúng cái đó: `/api/stream/<id>` trả 401 giữa bài là
+ * token trong hàng đợi native đã chết, không phải bài hỏng.
+ *
+ * Trả `null` khi phiên thật sự hỏng — lúc đó phải mời đăng nhập lại, không phải thử lại.
+ */
+export async function forceRefreshSessionToken(): Promise<string | null> {
+  const current = await loadSession();
+  if (!current) return null;
+  const refreshed = await refreshSession(current);
+  return refreshed?.token ?? null;
+}
+
+/**
  * Header xác thực dưới dạng cặp — đúng hình dạng mà module native `vong-audio` nhận
  * cho mỗi item hàng đợi.
  */

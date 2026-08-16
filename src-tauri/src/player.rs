@@ -121,6 +121,19 @@ impl Engine {
         Ok(())
     }
 
+    /// Bỏ hẳn bài đang phát. Khác `pause`: sau lệnh này không còn `Current` nào.
+    ///
+    /// Vì sao cần một lệnh riêng thay vì dùng `pause`: `pause` để nguyên `Current`, nên
+    /// `state()` vẫn tiếp tục chấm `ended = empty && !ended_sent` trên một sink mà JS đã
+    /// bỏ — một `player://ended` giả bắn về đúng lúc JS đang tự nhảy bài là hai bài bị
+    /// bỏ cho một lỗi. Không còn `Current` thì nhánh `None` của `state()` trả
+    /// `ended: false`, nên chuyện đó không thể xảy ra nữa.
+    pub fn stop(&self) {
+        if let Some(previous) = self.current.lock().take() {
+            previous.sink.stop();
+        }
+    }
+
     pub fn pause(&self) {
         if let Some(current) = self.current.lock().as_ref() {
             current.sink.pause();

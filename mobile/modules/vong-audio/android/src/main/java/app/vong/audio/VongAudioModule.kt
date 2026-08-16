@@ -14,6 +14,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -112,7 +113,7 @@ class VongAudioModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VongAudio")
 
-    Events("state", "ended", "trackChanged")
+    Events("state", "ended", "trackChanged", "error")
 
     OnCreate {
       val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
@@ -381,7 +382,10 @@ class VongAudioModule : Module() {
 
     override fun onPlaybackStateChanged(playbackState: Int) {
       if (playbackState == Player.STATE_ENDED) {
-        sendEvent("ended", Bundle.EMPTY)
+        // Kèm `id` như `error` và `trackChanged`: JS phải bỏ được sự kiện của một bài
+        // nó đã rời khỏi. `ended` gán nhầm bài là một cú nhảy bài không ai giải thích
+        // được — đúng loại lỗi mà cả chu kỳ này sinh ra để xoá.
+        sendEvent("ended", bundleOf("id" to controller?.currentMediaItem?.mediaId))
       }
       emitState()
     }
@@ -407,9 +411,52 @@ class VongAudioModule : Module() {
       emitState()
     }
 
+    /**
+     * Lỗi phát PHẢI đi lên JS, không được nuốt.
+     *
+     * Trước đây hàm này chỉ gọi `emitState()`. ExoPlayer gặp lỗi thì rơi về `STATE_IDLE`,
+     * mà `intendsToPlay()` loại `IDLE` ra — nên JS chỉ thấy `playing: false` và hiểu nhầm
+     * là người dùng bấm tạm dừng. Không `ended`, không lời nhắn, không nhảy bài: URL
+     * googlevideo hết hạn giữa phiên là nhạc lặng đi và không có gì nói vì sao.
+     *
+     * `id` là bài native ĐANG giữ lúc lỗi, không phải bài JS đang hiển thị: hai thứ có
+     * thể lệch nhau khi lỗi về đúng lúc đang đổi bài, và bên JS cần biết lỗi này của bài
+     * nào để không nhảy oan bài kế.
+     *
+     * `httpCode` tách 401 (token thư viện hết hạn — làm mới rồi phát lại) khỏi 403
+     * (URL googlevideo hết hạn — phải resolve lại) khỏi mất mạng (không có mã nào).
+     */
     override fun onPlayerError(error: PlaybackException) {
+      sendEvent(
+        "error",
+        bundleOf(
+          "id" to (controller?.currentMediaItem?.mediaId ?: lastTrackId),
+          "code" to error.errorCodeName,
+          "message" to (error.message ?: error.errorCodeName),
+          "httpCode" to httpStatusOf(error),
+        ),
+      )
       emitState()
     }
+  }
+
+  /**
+   * Mã HTTP của lỗi, nếu lỗi đến từ tầng mạng.
+   *
+   * `PlaybackException` bọc nguyên nhân thật nhiều tầng (`ExoPlaybackException` →
+   * `InvalidResponseCodeException`), nên phải đi hết chuỗi `cause` chứ không thể xem
+   * mỗi tầng đầu. Không phải lỗi mạng thì trả `null` — JS phân biệt "không có mã" với
+   * "mã 0".
+   */
+  private fun httpStatusOf(error: PlaybackException): Int? {
+    var cause: Throwable? = error.cause
+    while (cause != null) {
+      if (cause is HttpDataSource.InvalidResponseCodeException) {
+        return cause.responseCode
+      }
+      cause = cause.cause
+    }
+    return null
   }
 
   private companion object {

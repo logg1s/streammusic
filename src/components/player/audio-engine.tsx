@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   peekCurrentTrack,
   peekNeighbourIds,
+  peekNextTrack,
   registerSink,
   useCurrentTrack,
   usePlayer,
 } from "@/store/player";
+import { radioEngine } from "@/lib/radio-engine";
 
 /**
  * Hồ thẻ <audio>, là toàn bộ phần phát nhạc của ứng dụng.
@@ -16,7 +18,10 @@ import {
  * nguyên layout khi điều hướng, nên các thẻ không bao giờ bị unmount và nhạc chạy
  * liên tục lúc người dùng chuyển từ trang album sang trang nghệ sĩ.
  *
- * Vì sao nhiều thẻ: một bài lấy từ Google Drive mất ~3 giây mới ra byte đầu tiên và đó`n * là trần cứng của Drive. Giữ sẵn ±2 bài quanh bài đang nghe thì next lẫn prev đều`n * gần như tức thì. Bài vừa phát xong vẫn còn nguyên trong thẻ cũ, nên "giữ sẵn prev"`n * chỉ là không tái dùng thẻ đó — không tốn thêm byte nào.
+ * Vì sao nhiều thẻ: một bài lấy từ Google Drive mất ~3 giây mới ra byte đầu tiên và đó
+ * là trần cứng của Drive. Giữ sẵn ±2 bài quanh bài đang nghe thì next lẫn prev đều
+ * gần như tức thì. Bài vừa phát xong vẫn còn nguyên trong thẻ cũ, nên "giữ sẵn prev"
+ * chỉ là không tái dùng thẻ đó — không tốn thêm byte nào.
  *
  * ── BẤT BIẾN ─────────────────────────────────────────────────────────────────
  * Tại mọi thời điểm, NHIỀU NHẤT MỘT thẻ ở trạng thái không tạm dừng, và đó luôn là
@@ -55,6 +60,15 @@ const PREFETCH_SCHEDULE_MS = [400, 3500];
 /** Nạp sẵn tối đa ngần này bài phía trước. */
 const PREFETCH_AHEAD = 2;
 
+/**
+ * Thôi thử lại sau ngần này bài lỗi liên tiếp. Giống hệt vỏ Windows và Android.
+ *
+ * Trần này tồn tại vì đường thoát khi lỗi là tự nhảy bài: một kho lưu trữ vừa hết hạn
+ * cấp quyền làm MỌI bài lỗi, nên không có trần thì một cú lỗi đi hết cả hàng đợi trong
+ * vài giây, mỗi bước một lượt tải hỏng.
+ */
+const MAX_CONSECUTIVE_FAILURES = 3;
+
 export function AudioEngine() {
   /** Các phần tử trong hồ, gán qua callback ref. */
   const els = useRef<(HTMLAudioElement | null)[]>(
@@ -66,6 +80,13 @@ export function AudioEngine() {
   );
   /** Chỉ số thẻ đang phát. Cập nhật đồng bộ trong reconcile nên không bao giờ cũ. */
   const currentSlot = useRef(-1);
+  /**
+   * Số bài lỗi liên tiếp. Về 0 chỉ khi có bằng chứng ĐÃ RA TIẾNG (`currentTime > 0`),
+   * không phải khi nạp xong: `onError` của thẻ <audio> bắn sau khi đã nạp, nên reset
+   * theo "đã đổi bài" thì bộ đếm không bao giờ chạm trần trong đúng trường hợp nó sinh
+   * ra để chặn.
+   */
+  const failuresRef = useRef(0);
 
   const track = useCurrentTrack();
   const trackId = track?.id ?? null;
@@ -346,6 +367,8 @@ export function AudioEngine() {
     onTimeUpdate: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       const el = e.currentTarget;
       if (!isCurrent(el)) return;
+      // Bằng chứng duy nhất được chấp nhận là "bài này phát được": đồng hồ đã chạy.
+      if (el.currentTime > 0) failuresRef.current = 0;
       usePlayer.getState().syncTime(el.currentTime, el.duration);
       maybePreloadNext(el.currentTime, el.duration);
       // Thanh tua trên màn hình khoá điện thoại chỉ chạy khi có setPositionState.
@@ -400,13 +423,44 @@ export function AudioEngine() {
     onPlaying: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       if (isCurrent(e.currentTarget)) usePlayer.getState().setBuffering(false);
     },
+    /**
+     * Bài thư viện không tải được.
+     *
+     * Trước đây hàm này chỉ ghi lời nhắn rồi đứng im — hàng đợi chết ngay tại bài hỏng,
+     * trong khi vỏ Windows và Android đều đã tự đi tiếp. Đó là lệch nền tảng ở đúng
+     * đường xử lý lỗi, chỗ đắt nhất để lệch, và là thứ cuối cùng còn sót của chu kỳ
+     * "phát nhạc không được chết im lặng".
+     */
     onError: (e: React.SyntheticEvent<HTMLAudioElement>) => {
-      if (!isCurrent(e.currentTarget)) return;
-      usePlayer
-        .getState()
-        .setError(
-          "Không tải được bài hát. Kết nối kho lưu trữ có thể cần cấp quyền lại.",
-        );
+      const el = e.currentTarget;
+      if (!isCurrent(el)) return;
+
+      const store = usePlayer.getState();
+      store.setError(
+        "Không tải được bài hát. Kết nối kho lưu trữ có thể cần cấp quyền lại.",
+      );
+
+      // Bất biến 1: thẻ hỏng phải im hẳn trước khi bài kế lên tiếng. `onError` không
+      // tự dừng thẻ, và `reconcile()` chỉ dừng những thẻ nó biết là không phải bài
+      // hiện tại — nên nếu không dừng ở đây thì trong khe giữa hai lần reconcile có
+      // thể còn thẻ cũ đang chạy.
+      el.pause();
+
+      failuresRef.current += 1;
+      const current = peekCurrentTrack();
+      if (
+        failuresRef.current >= MAX_CONSECUTIVE_FAILURES ||
+        !current ||
+        !peekNextTrack()
+      ) {
+        return;
+      }
+
+      // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người. Thiếu
+      // dòng này thì một kho lưu trữ hết hạn cấp quyền bị ghi vào `radio_feedback`
+      // thành một loạt "người dùng bỏ qua" — vĩnh viễn, theo tài khoản, không đường gỡ.
+      radioEngine.noteError(current.id);
+      store.next();
     },
   };
 

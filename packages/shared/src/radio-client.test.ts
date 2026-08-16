@@ -61,6 +61,7 @@ describe("autoplaySeed", () => {
       status: "idle" as const,
       exhausted: false,
       message: null,
+      errorKind: null,
     };
     expect(autoplaySeed(state({ position: 2, radio }))).toBeNull();
   });

@@ -94,4 +94,15 @@ export interface RadioState {
    * `setError` lại tắt `isPlaying` — bài đang phát sẽ đứt oan.
    */
   message: string | null;
+  /**
+   * Nhãn đóng cho lý do lỗi gần nhất. `message` là để hiện cho người đọc; cái này là
+   * để đếm.
+   *
+   * Tồn tại vì hết quota YouTube và cạn kho ứng viên biểu hiện GIỐNG HỆT nhau ở phía
+   * người dùng: radio ngừng ra bài. Không tách được hai cái thì bảng số liệu sau khi
+   * sửa xong sẽ hiển thị "vẫn còn hàng đợi chết" mà không ai biết đó là bug cũ tái
+   * phát hay đơn giản là hết quota trong ngày. Gộp hai nguyên nhân khác nhau vào một
+   * tín hiệu chính là cách sự cố ban đầu tàng hình suốt từ đầu.
+   */
+  errorKind: "quota" | "network" | "other" | null;
 }

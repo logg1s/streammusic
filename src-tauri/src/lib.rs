@@ -39,6 +39,17 @@ fn play_track(state: State<'_, AppState>, track: TrackRequest) -> Result<(), Str
     Ok(())
 }
 
+/// Bỏ bài đang phát. JS gọi trên đường xử lý lỗi, TRƯỚC khi tự nhảy sang bài kế.
+///
+/// Không có lệnh này thì `play_track` hỏng (resolve lỗi, `wait_meta` lỗi) để nguyên
+/// sink cũ đang chạy — rồi JS nhảy bài, và người dùng nghe bài A trong khi màn hình
+/// ghi bài C.
+#[tauri::command]
+fn stop(state: State<'_, AppState>) {
+    state.player.stop();
+    state.smtc.set_playback(false, 0.0);
+}
+
 #[tauri::command]
 fn pause(state: State<'_, AppState>) {
     state.player.pause();
@@ -114,6 +125,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
             play_track,
+            stop,
             pause,
             resume,
             seek,

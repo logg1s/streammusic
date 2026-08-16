@@ -21,7 +21,9 @@ export type AnalyticsShell = "web" | "android" | "windows";
 /**
  * Danh mục sự kiện v1. Đây là allowlist: tên không nằm đây thì client bỏ qua và API
  * route trả 400. Lý do dùng allowlist thay vì tự do — một danh mục đóng là thứ duy
- * nhất khiến `docs/product/telemetry.md` không bao giờ nói dối về những gì được thu.
+ * nhất khiến bản mô tả "app thu những gì" không bao giờ nói dối, vì mảng này CHÍNH LÀ
+ * bản mô tả đó: mỗi mục có ghi chú props ngay bên trên, và không có đường nào gửi được
+ * một sự kiện không nằm ở đây.
  */
 export const ANALYTICS_EVENTS = [
   /** Mở app. props: cold (boolean) */
@@ -36,8 +38,20 @@ export const ANALYTICS_EVENTS = [
   "radio_seed",
   /** Radio nạp thêm lô. props: added */
   "radio_refill",
-  /** Hàng đợi chạy hết mà không nối tiếp. props: depth */
+  /** Hàng đợi chạy hết mà không nối tiếp. props: depth, reason */
   "queue_end",
+  /**
+   * Bấm next mà không đi đâu được. props: reason, depth, queueLength
+   *
+   * `depth` đếm số bài đã kết thúc trong hàng đợi này, KHÔNG tính bài đang được chọn
+   * lúc bấm hụt — nên "chết ở bài thứ N" là `depth + 1`.
+   *
+   * Tồn tại vì `queue_end` không đủ: nó chỉ bắn khi hàng đợi bị xoá sạch, còn cách
+   * hàng đợi chết trong thực tế là bài cuối vẫn được chọn mà phía sau không còn gì.
+   * Không có sự kiện này thì "người dùng bấm next và không có gì xảy ra" trông giống
+   * hệt "người dùng nghe xong rồi tắt app".
+   */
+  "advance_failed",
   /** Resolve URL YouTube thất bại. props: reason */
   "resolve_fail",
   /** Lỗi phát. props: stage, code */
@@ -217,7 +231,7 @@ export function createAnalytics(options: AnalyticsOptions): Analytics {
   } = options;
 
   // Mặc định BẬT (opt-out) — quyết định của chủ sản phẩm, có công tắc trong Cài đặt
-  // và được liệt kê đầy đủ ở docs/product/telemetry.md.
+  // và danh mục đầy đủ ở `ANALYTICS_EVENTS` phía trên.
   let enabled = true;
   let installId: string | null = null;
   const sessionId = uuid();

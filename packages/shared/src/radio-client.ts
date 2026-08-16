@@ -1,5 +1,10 @@
 import type { PlayerState, PlayerStore } from "./player-store";
-import type { FetchLike, PlayableTrack, TrackSource } from "./types";
+import type {
+  FetchLike,
+  PlayableTrack,
+  RadioState,
+  TrackSource,
+} from "./types";
 
 /**
  * Lớp gọi API radio, dùng chung cho web và vỏ native.
@@ -27,13 +32,43 @@ export const REFILL_THRESHOLD = 2;
  * dùng (taste profile phía server) lo phần "hợp với cả playlist".
  */
 export function autoplaySeed(state: PlayerState): PlayableTrack | null {
-  if (!state.autoplay || state.radio || state.repeat !== "off") return null;
+  if (!state.autoplay || state.repeat !== "off") return null;
+  // Có radio đang chạy thì RadioController lo phần nạp thêm — trừ khi nó đã cạn.
+  // Radio cạn mà vẫn chặn ở đây chính là cái bẫy cũ: hàng đợi chết, và đường thoát
+  // duy nhất cũng bị khoá bởi chính cái trạng thái chết đó, kể cả sau khi mở lại app.
+  if (state.radio && !state.radio.exhausted) return null;
   const { queue, order, position } = state;
   if (order.length === 0) return null;
   if (order.length - 1 - position > REFILL_THRESHOLD) return null;
   return queue[order[position]] ?? null;
 }
 const REFILL_BATCH = 10;
+
+/**
+ * Lỗi nạp gợi ý phải lùi dần trước khi thử lại.
+ *
+ * Trước đây `exhausted` là cái phanh duy nhất của nhánh nạp thêm — và vì nó không bao
+ * giờ nhả nên "phanh" thực chất là "đứng hẳn". Bỏ chốt đó mà không thay bằng gì thì
+ * cổng nạp mở lại ở MỌI lần store phát state: web ~2.5 lần/giây, Android mỗi 400ms,
+ * đập vào một route động có đào InnerTube. Một lỗi treo thành một vòng lặp request.
+ *
+ * 1s, 2s, 4s… trần 60s. Trần tồn tại để một sự cố server kéo dài không biến mỗi thiết
+ * bị đang mở thành một máy phát request.
+ */
+export const RADIO_RETRY_CAP_MS = 60_000;
+export function radioRetryDelayMs(consecutiveFailures: number): number {
+  if (consecutiveFailures <= 0) return 0;
+  return Math.min(1000 * 2 ** (consecutiveFailures - 1), RADIO_RETRY_CAP_MS);
+}
+
+/**
+ * Bao nhiêu lần gieo lại radio liên tiếp mà vẫn ra lô rỗng thì thôi.
+ *
+ * Vòng lặp bị chặn: exhausted → autoplaySeed → startRadio đặt lại exhausted:false →
+ * xin lô đầu với seedKey mới (một lần đào server) → trả rỗng → exhausted lại → lặp mãi.
+ * `startingRef` chỉ chặn được request đang bay, không chặn được chu kỳ.
+ */
+export const MAX_RESEED_ATTEMPTS = 3;
 /** Nghe được ngần này phần bài thì tính là "nghe hết", ít hơn là "bỏ qua". */
 const FINISH_RATIO = 0.6;
 /** Video không khai báo thời lượng: lấy độ dài một bài hát thường thấy làm mốc. */
@@ -55,6 +90,24 @@ export interface RadioClientOptions {
   keepalive?: boolean;
 }
 
+/**
+ * Vì sao lượt nghe kết thúc. Phân biệt này KHÔNG phải để thống kê cho đẹp: nó quyết
+ * định có ghi `radio_feedback` hay không.
+ *
+ * Suy ra "bỏ qua" từ mỗi thời lượng nghe là sai ở đúng chỗ đắt nhất — bài không phát
+ * được có time = 0, tức là trông y hệt một cú skip dứt khoát. Ngày 2026-08-16 một
+ * chuỗi lỗi phát 63 giây đã ghi 106 skip vào tài khoản chính, xoá vĩnh viễn 7 nghệ sĩ
+ * và 47 video khỏi kho gợi ý; 67% toàn bộ thiệt hại của tài khoản đó đến từ một phút
+ * không hề có ai nghe nhạc.
+ *
+ * Quy tắc: chỉ con người mới được dạy mô hình. Máy tự nhảy bài thì không.
+ */
+export type PlayEndReason =
+  /** Người dùng bấm next/previous, chọn bài khác, hoặc bài chạy hết. */
+  | "user"
+  /** Vỏ tự nhảy vì bài không phát được (resolve hỏng, 403, chặn nhúng, decoder lỗi). */
+  | "error";
+
 /** Một lượt nghe vừa kết thúc, đủ thông tin để báo về server. */
 export interface PlayedTrack {
   id: string;
@@ -64,6 +117,11 @@ export interface PlayedTrack {
   durationSec: number | null;
   /** Vị trí nghe gần nhất. */
   time: number;
+  /**
+   * Mặc định "user" để vỏ chưa cập nhật vẫn giữ hành vi cũ. Mọi đường xử lý lỗi
+   * PHẢI truyền "error" — quên là quay lại đúng cái bug đã đo được ở trên.
+   */
+  reason?: PlayEndReason;
 }
 
 export interface RadioClient {
@@ -98,6 +156,16 @@ export function createRadioClient(
     });
   };
 
+  /** Lỗi có mang theo nhãn đóng để đếm được. Xem `RadioState.errorKind`. */
+  class RadioFetchError extends Error {
+    constructor(
+      message: string,
+      readonly kind: NonNullable<RadioState["errorKind"]>,
+    ) {
+      super(message);
+    }
+  }
+
   const fetchBatch = async (
     seedId: string,
     exclude: string[],
@@ -108,18 +176,35 @@ export function createRadioClient(
       tracks?: PlayableTrack[];
       error?: string;
     };
-    if (!res.ok) throw new Error(body.error ?? "Không lấy được gợi ý.");
+    if (!res.ok) {
+      // 429 = hết quota YouTube trong ngày. Phải phân biệt được với kho ứng viên cạn:
+      // hai nguyên nhân này cho ra cùng một triệu chứng, và chu kỳ này tồn tại vì
+      // một triệu chứng không phân biệt được nguồn gốc thì không sửa được.
+      throw new RadioFetchError(
+        body.error ?? "Không lấy được gợi ý.",
+        res.status === 429 ? "quota" : "network",
+      );
+    }
     return body.tracks ?? [];
   };
 
-  /** Lỗi gợi ý KHÔNG được làm đứt bài đang phát — chỉ ghi vào trạng thái radio. */
+  /**
+   * Lỗi gợi ý KHÔNG được làm đứt bài đang phát — chỉ ghi vào trạng thái radio.
+   *
+   * Trước đây hàm này bật luôn `exhausted`, gộp "mạng lỗi" với "hết bài để gợi ý".
+   * Hai thứ đó khác nhau về hệ quả: `exhausted` được ghi xuống đĩa, không có gì tắt
+   * nó, và `autoplaySeed()` từ chối gieo lại khi đã có radio — nên đúng MỘT lần
+   * timeout là app không bao giờ tự phát tiếp được nữa, qua cả những lần mở lại sau.
+   * Một lỗi tạm thời phải để lại một trạng thái tạm thời.
+   */
   const failRadio = (error: unknown) => {
     store.usePlayer
       .getState()
       .setRadioStatus(
         "error",
-        true,
+        false,
         error instanceof Error ? error.message : "Không lấy được gợi ý.",
+        error instanceof RadioFetchError ? error.kind : "other",
       );
   };
 
@@ -151,6 +236,7 @@ export function createRadioClient(
     reportPlayed(last) {
       const full = last.durationSec ?? FALLBACK_DURATION_SEC;
       const finished = last.time >= FINISH_RATIO * full;
+      const byError = last.reason === "error";
 
       // Chuyển bài có thể đi kèm việc đóng tab; keepalive để request vẫn đi tiếp.
       void post(
@@ -168,6 +254,11 @@ export function createRadioClient(
 
       // Hai request tách nhau vì hai bảng có vòng đời khác nhau: `play_events` giữ
       // mãi, `radio_feedback` chỉ để xếp hạng.
+      //
+      // `play_events` vẫn ghi cả lượt hỏng — lịch sử nghe nên phản ánh cả cái đã hỏng,
+      // và nó không quay lại chấm điểm gợi ý. `radio_feedback` thì tuyệt đối không:
+      // một dòng skip ở đây là vĩnh viễn, không TTL, không đường gỡ.
+      if (byError) return;
       if (last.source !== "youtube" || !last.videoId) return;
       void post(
         "/api/radio/feedback",

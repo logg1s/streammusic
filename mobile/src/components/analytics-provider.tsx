@@ -50,6 +50,9 @@ export function AnalyticsProvider() {
         queueLength: s.queue.length,
         radioActive: s.radio !== null,
         radioSeedId: s.radio?.seedId ?? null,
+        advanceFailures: s.advanceFailures,
+        radioExhausted: s.radio?.exhausted ?? false,
+        radioErrorKind: s.radio?.errorKind ?? null,
         error: s.error,
       });
     });
