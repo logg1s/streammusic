@@ -41,45 +41,14 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 - Schema changes go through `db:generate` + `db:migrate`. **Not `db:push`** — it
   leaves no migration file and can drop a column to settle a diff; mixing the two
   breaks `db:migrate` with an unhelpful silent non-zero exit. See CONTRIBUTING.
-
-## Product process
-
-*What* to build is decided in `docs/product/` — roadmap, scored backlog, metric
-definitions, telemetry catalogue, PRD and weekly-review templates. Read
-`docs/product/README.md` before adding a feature; it carries the Definition of Ready and
-Definition of Done. Metric queries live in `scripts/metrics/`.
-
-Any change to `ANALYTICS_EVENTS` (`packages/shared/src/analytics.ts`) must update
-`docs/product/telemetry.md` in the same commit, and the Google Play Data safety
-declaration before the next store submission.
-
-## Harness
-
-**Trigger:** for work larger than a single edit — planning a cycle, deciding what to build,
-shipping a feature end to end — use the `vong-harness` skill. It orchestrates the eight
-agents in `.claude/agents/`. Simple questions and one-file edits need no harness.
-
-**Change log:**
-
-| Date | Change | Target | Why |
-| --- | --- | --- | --- |
-| 2026-08-16 | Initial harness — 8 agents, 8 skills | `.claude/` | Product decisions and the hard invariants both depended on whoever happened to be reading |
-| 2026-08-16 | Product process moved into the repo | `docs/product/` | The roadmap lived in assistant memory, unreadable to contributors |
-| 2026-08-16 | Anonymous telemetry pipeline | `packages/shared`, `src/app/api/events` | Four stages shipped with no way to tell whether they worked |
-| 2026-08-16 | `deploy-web` no longer tells the reader to run `db:push` | `.claude/skills/deploy-web` | The skill contradicted a hard invariant on this very page, and aimed it at the production database |
+- Any change to `ANALYTICS_EVENTS` (`packages/shared/src/analytics.ts`) must
+  update the Google Play Data safety declaration before the next store
+  submission.
 
 ## Workflows (see `.claude/skills/`)
 
 | Task | Skill |
 | --- | --- |
-| Orchestrate a cycle / larger work | `vong-harness` |
-| Plan, prioritise, write a PRD | `product-planning` |
-| Weekly numbers and metric questions | `metrics-review` |
-| Competitive research | `market-research` |
-| Check the five hard invariants | `invariant-check` |
-| Cross-shell boundary QA | `shell-parity` |
-| Design token parity, visual review | `design-review` |
-| Contributor-facing files, hygiene | `oss-readiness` |
 | Deploy web to Vercel | `deploy-web` |
 | Signed Android APK | `release-android` |
 | Windows exe + installer | `release-windows` |

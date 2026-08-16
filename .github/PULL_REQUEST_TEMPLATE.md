@@ -23,9 +23,6 @@ Does this PR touch any of the five hard invariants?
      4. native library streaming carries Authorization: Bearer
      5. mobile/android/ is generated — no hand edits -->
 
-If checked, consider running the invariant script:
-`node .claude/skills/invariant-check/scripts/check-invariants.mjs --diff origin/master`
-
 ## Verification
 
 Which commands did you run, and on which shell(s)?
@@ -38,7 +35,7 @@ Which commands did you run, and on which shell(s)?
 
 ## Other notes
 
-- [ ] If `ANALYTICS_EVENTS` (`packages/shared/src/analytics.ts`) changed, `docs/product/telemetry.md` was updated in this same PR.
+- [ ] If `ANALYTICS_EVENTS` (`packages/shared/src/analytics.ts`) changed, it is called out above so the Google Play Data safety declaration can be updated.
 - [ ] User-facing strings are Vietnamese; docs and commit message are English.
 
 <!-- Anything a reviewer should know that isn't obvious from the diff. -->

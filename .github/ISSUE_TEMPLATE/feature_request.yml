@@ -5,11 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        What gets *built* is decided through a scored backlog in
-        `docs/product/backlog.md` (see `docs/product/README.md`) — a
-        maintainer will triage this and add it there if it fits. Filling in
-        the fields below (especially the problem, not just the solution)
-        makes that triage much faster.
+        A maintainer will triage this and decide whether it fits the
+        roadmap. Filling in the fields below (especially the problem, not
+        just the solution) makes that triage much faster.
 
   - type: textarea
     id: problem

@@ -45,16 +45,6 @@ generated-`mobile/android/` rule above). Read it before touching playback,
 audio URLs, native shells, or streaming auth — a PR that breaks one of these
 will be asked to fix it before review continues.
 
-If you have Claude Code or a compatible agent available, this repo's
-`.claude/skills/invariant-check/` script checks these automatically:
-
-```bash
-node .claude/skills/invariant-check/scripts/check-invariants.mjs --diff origin/master
-```
-
-Running it isn't required to contribute, but it catches the most common
-mistake before a human has to.
-
 ## Setting up
 
 ```bash
@@ -103,8 +93,9 @@ only you can run.
 - Keep changes scoped to the shell(s) they affect. A web-only change
   shouldn't touch `mobile/` or `src-tauri/`.
 - If you change anything under `packages/shared/src/analytics.ts`
-  (`ANALYTICS_EVENTS`), update `docs/product/telemetry.md` in the *same*
-  commit — this is enforced by review, not by CI.
+  (`ANALYTICS_EVENTS`), say so explicitly in the PR description — the Google
+  Play Data safety declaration has to be updated before the next store
+  submission.
 
 ## Verifying before you open a PR
 
