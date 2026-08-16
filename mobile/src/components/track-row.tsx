@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { PlayableTrack } from "@vong/shared";
 import { Artwork } from "@/components/artwork";
 import { formatDuration, trackSubtitle } from "@/lib/format";
-import { startRadioFor } from "@/components/player/radio-controller";
+import { startRadioFor } from "@/lib/radio-engine";
 import { useIsCurrentTrack, usePlayer } from "@/store/player";
 import { colors, font, radius, spacing } from "@/theme";
 
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     fontSize: font.md,
   },
   currentText: {
-    color: colors.accent,
+    color: colors.accentText,
     fontWeight: "600",
   },
   subtitle: {

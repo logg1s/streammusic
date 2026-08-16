@@ -13,15 +13,24 @@ export const colors = {
   surfaceElevated: "#1f1f29",
   text: "#f4f4f5",
   muted: "#a1a1aa",
-  subtle: "#71717a",
+  /** #71717a chỉ đạt 4.12 trên nền tối — dưới chuẩn AA cho chữ thường. */
+  subtle: "#8a8a94",
   accent: "#f43f5e",
   /** Nền nhấn mờ cho trạng thái đang chọn/đang phát — accent 14% trên nền tối. */
   accentSoft: "rgba(244, 63, 94, 0.14)",
+  /**
+   * Màu nhấn dùng làm CHỮ trên nền tối (hồng nhạt, rose-300).
+   * `accent` là màu NỀN của nút; đặt nguyên nó lên nền tối thì vẫn đạt AA nhưng
+   * lệch hẳn với bản web, nên chữ nhấn đi lối riêng — giống `--accent-text` bên web.
+   */
+  accentText: "#fda4af",
+  /** Lỗi và cảnh báo. Tách khỏi `accent` để cảnh báo không lẫn với chỗ đang nhấn. */
+  danger: "#f87171",
   border: "#27272a",
 } as const;
 
-/** Chữ nằm trên nền `accent` — trắng đặc để đủ tương phản với hồng đậm. */
-export const accentText = "#ffffff";
+/** Chữ và icon nằm TRÊN nền `accent` — trắng đặc để đủ tương phản với hồng đậm. */
+export const onAccent = "#ffffff";
 
 export const spacing = {
   xs: 4,

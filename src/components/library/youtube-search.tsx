@@ -39,7 +39,7 @@ export function YoutubeSearch({ query }: { query: string }) {
         }
         const found = body.tracks ?? [];
         setTracks(found);
-        // Chỉ đếm, KHÔNG kèm từ khoá — xem docs/product/telemetry.md.
+        // Chỉ đếm, KHÔNG kèm từ khoá — xem `ANALYTICS_EVENTS` trong `@vong/shared`.
         getAnalytics()?.track("search_run", {
           results: found.length,
           hasYoutube: found.length > 0,

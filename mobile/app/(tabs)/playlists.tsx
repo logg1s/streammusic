@@ -16,9 +16,10 @@ import { colors, font, spacing } from "@/theme";
 /**
  * Playlist đã lưu.
  *
- * Không có nút tạo mới ở đây: `POST /api/playlists` đòi danh sách bài kèm theo (nó lưu
- * hàng đợi đang phát), nên chỗ tạo playlist đúng là màn hình phát, không phải màn hình
- * danh sách.
+ * Không có nút tạo mới ở đây, và cũng chưa có ở bất kỳ đâu trong app Android: `POST
+ * /api/playlists` đòi cả danh sách bài kèm theo (nó lưu hàng đợi đang phát), mà vỏ này
+ * hiện chỉ đọc — `src/lib/api.ts` không gửi request ghi nào ngoài lúc đăng nhập. Vì vậy
+ * trạng thái rỗng chỉ đường sang web/máy tính chứ không chỉ sang màn hình phát.
  */
 export default function PlaylistsScreen() {
   const { data, error, loading, reload } = useApi<PlaylistList>("/api/playlists");
@@ -59,7 +60,7 @@ export default function PlaylistsScreen() {
         ListEmptyComponent={
           <EmptyNote
             title="Chưa có playlist nào"
-            hint="Mở màn hình phát rồi lưu hàng đợi hiện tại lại thành playlist."
+            hint="Lưu hàng đợi thành playlist trên bản web hoặc máy tính."
           />
         }
       />

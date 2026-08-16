@@ -4,12 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Disc3,
-  HardDriveDownload,
   ListMusic,
   ListPlus,
   LogOut,
   Radio,
   Search,
+  Settings,
   Users,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -69,17 +69,17 @@ export function AppSidebar({ userName }: { userName: string | null }) {
 
       <div className="mt-auto space-y-3 pt-6">
         <Link
-          href="/settings/connections"
+          href="/settings"
           aria-current={pathname.startsWith("/settings") ? "page" : undefined}
           className={itemClass(pathname.startsWith("/settings"))}
         >
-          <HardDriveDownload
+          <Settings
             className={cn(
               "size-4 shrink-0",
               pathname.startsWith("/settings") && "text-accent-text",
             )}
           />
-          Kho lưu trữ
+          Cài đặt
         </Link>
 
         <div className="flex items-center justify-between gap-2 px-1">

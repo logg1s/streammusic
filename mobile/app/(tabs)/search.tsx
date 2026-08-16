@@ -82,7 +82,7 @@ export default function SearchScreen() {
       .then((result) => {
         if (!alive) return;
         setDone({ query, tracks: result.tracks, error: null });
-        // Chỉ đếm, KHÔNG kèm từ khoá — xem docs/product/telemetry.md.
+        // Chỉ đếm, KHÔNG kèm từ khoá — xem `ANALYTICS_EVENTS` trong `@vong/shared`.
         getAnalytics().track("search_run", {
           results: result.tracks.length,
           hasYoutube: result.tracks.length > 0,

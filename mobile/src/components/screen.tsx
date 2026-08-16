@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useSegments } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { accentText, colors, font, layout, radius, spacing } from "@/theme";
+import { colors, font, layout, onAccent, radius, spacing } from "@/theme";
 
 /**
  * Khung ngoài của mọi màn hình, cộng ba trạng thái mà màn hình nào cũng phải có
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   buttonLabel: {
-    color: accentText,
+    color: onAccent,
     fontSize: font.sm,
     fontWeight: "600",
   },

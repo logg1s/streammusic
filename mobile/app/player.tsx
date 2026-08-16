@@ -12,7 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Scrubber } from "@/components/player/scrubber";
-import { accentText, colors, font, radius, spacing } from "@/theme";
+import { colors, font, onAccent, radius, spacing } from "@/theme";
 import { useCurrentTrack, usePlayer } from "@/store/player";
 
 /**
@@ -149,12 +149,12 @@ export default function PlayerScreen() {
           style={styles.playButton}
         >
           {isBuffering && isPlaying ? (
-            <ActivityIndicator color={accentText} />
+            <ActivityIndicator color={onAccent} />
           ) : (
             <Ionicons
               name={isPlaying ? "pause" : "play"}
               size={32}
-              color={accentText}
+              color={onAccent}
               style={isPlaying ? undefined : styles.playNudge}
             />
           )}
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   error: {
-    color: colors.accent,
+    color: colors.danger,
     fontSize: font.sm,
     marginTop: spacing.sm,
   },
@@ -354,8 +354,10 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800",
   },
+  /* Chữ của dòng đang phát. Hồng nhạt chứ không phải `accent`: bên web chỉ ba vạch
+     chỉ báo mới dùng `accent` đặc, còn tiêu đề đi bằng `--accent-text`. */
   activeGlyph: {
-    color: colors.accent,
+    color: colors.accentText,
   },
   stepButton: {
     minWidth: 56,

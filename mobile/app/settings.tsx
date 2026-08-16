@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     fontSize: font.xs,
   },
   warn: {
-    color: colors.accent,
+    color: colors.danger,
   },
   signOut: {
     borderWidth: StyleSheet.hairlineWidth,

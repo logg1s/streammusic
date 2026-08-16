@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Artwork } from "@/components/artwork";
 import { useSmoothTime } from "@/lib/use-smooth-time";
-import { colors, font, layout, radius, spacing } from "@/theme";
+import { colors, font, layout, onAccent, radius, spacing } from "@/theme";
 import { useCurrentTrack, usePlayer } from "@/store/player";
 
 /**
@@ -68,7 +68,7 @@ export function PlayerBar() {
           <Ionicons
             name={isPlaying ? "pause" : "play"}
             size={20}
-            color={colors.bg}
+            color={onAccent}
             // Tam giác play của Ionicons lệch quang học sang trái một chút.
             style={isPlaying ? undefined : styles.playNudge}
           />
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },

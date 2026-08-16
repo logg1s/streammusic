@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { PlayableTrack } from "@vong/shared";
 import { Artwork } from "@/components/artwork";
 import { usePlayer } from "@/store/player";
-import { accentText, colors, font, radius, spacing } from "@/theme";
+import { colors, font, onAccent, radius, spacing } from "@/theme";
 
 /**
  * Đầu trang chi tiết (album, nghệ sĩ, playlist): ảnh bìa, tên, dòng phụ và một nút phát.
@@ -43,7 +43,7 @@ export function DetailHeader({
             onPress={() => usePlayer.getState().playQueue(tracks, 0)}
             style={({ pressed }) => [styles.button, pressed && styles.pressed]}
           >
-            <Ionicons name="play" size={14} color={accentText} />
+            <Ionicons name="play" size={14} color={onAccent} />
             <Text style={styles.buttonLabel}>{actionLabel}</Text>
           </Pressable>
         ) : null}
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   buttonLabel: {
-    color: accentText,
+    color: onAccent,
     fontSize: font.sm,
     fontWeight: "700",
   },

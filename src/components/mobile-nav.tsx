@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Disc3, HardDriveDownload, ListMusic, Radio, Search } from "lucide-react";
+import { Disc3, ListMusic, Radio, Search, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +11,7 @@ const TABS = [
   { href: "/albums", label: "Album", icon: Disc3 },
   { href: "/tracks", label: "Bài hát", icon: ListMusic },
   { href: "/search", label: "Tìm", icon: Search },
-  { href: "/settings/connections", label: "Kho", icon: HardDriveDownload },
+  { href: "/settings", label: "Cài đặt", icon: Settings },
 ] as const;
 
 function isActive(pathname: string, href: string) {

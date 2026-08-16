@@ -84,7 +84,7 @@ export default function PlaylistScreen() {
         ListEmptyComponent={
           <EmptyNote
             title="Playlist này đang trống"
-            hint="Thêm bài từ hàng đợi ở màn hình phát."
+            hint="Lưu hàng đợi thành playlist trên bản web hoặc máy tính."
           />
         }
       />

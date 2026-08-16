@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { count, eq } from "drizzle-orm";
+import { ChevronLeft } from "lucide-react";
 import { getDb } from "@/db";
 import {
   scanRoots,
@@ -8,7 +10,6 @@ import {
 } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { ConnectionsManager } from "@/components/settings/connections-manager";
-import { TelemetryToggle } from "@/components/settings/telemetry-toggle";
 import { YoutubeLink } from "@/components/settings/youtube-link";
 import { requireUserId } from "@/lib/auth";
 import { listConnections } from "@/lib/connections";
@@ -77,6 +78,15 @@ export default async function ConnectionsPage({
 
   return (
     <>
+      {/* Trang con của /settings — không có đường quay lại thì nó thành ngõ cụt. */}
+      <Link
+        href="/settings"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-accent-text"
+      >
+        <ChevronLeft className="size-4" />
+        Cài đặt
+      </Link>
+
       <PageHeader
         eyebrow="Cài đặt"
         title="Kho lưu trữ"
@@ -125,8 +135,6 @@ export default async function ConnectionsPage({
       />
 
       <ConnectionsManager connections={views} available={available} />
-
-      <TelemetryToggle />
     </>
   );
 }

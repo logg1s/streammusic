@@ -356,7 +356,7 @@ export const analyticsShellEnum = pgEnum("analytics_shell", [
  * theo người dùng thì dùng `play_events`, nơi việc đó là chủ đích và có kiểm soát.
  *
  * `installId` do máy người dùng sinh ra và có thể xoá; danh mục sự kiện được chốt cứng
- * ở `ANALYTICS_EVENTS` trong `@vong/shared` và ghi lại ở docs/product/telemetry.md.
+ * ở `ANALYTICS_EVENTS` trong `@vong/shared`, nơi mỗi sự kiện có ghi chú props kèm theo.
  */
 export const analyticsEvents = pgTable(
   "analytics_events",

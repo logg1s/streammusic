@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { signIn } from "@/lib/api";
-import { accentText, colors, font, radius, spacing } from "@/theme";
+import { colors, font, onAccent, radius, spacing } from "@/theme";
 
 /**
  * Màn hình đăng nhập.
@@ -56,7 +56,7 @@ export default function LoginScreen() {
           ]}
         >
           {pending ? (
-            <ActivityIndicator color={accentText} />
+            <ActivityIndicator color={onAccent} />
           ) : (
             <Text style={styles.buttonLabel}>Đăng nhập bằng Google</Text>
           )}
@@ -114,12 +114,12 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   buttonLabel: {
-    color: accentText,
+    color: onAccent,
     fontSize: font.md,
     fontWeight: "700",
   },
   error: {
-    color: colors.accent,
+    color: colors.danger,
     fontSize: font.sm,
     textAlign: "center",
   },

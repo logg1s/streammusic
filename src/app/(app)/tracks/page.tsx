@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TrackList } from "@/components/library/track-list";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
@@ -45,23 +46,30 @@ export default async function TracksPage({
           aria-label="Phân trang"
           className="mt-8 flex items-center justify-between border-t border-border pt-4 text-sm"
         >
+          {/*
+            Phải là `next/link`, không được là `<a>`. Thẻ `a` thường là một lần điều
+            hướng tài liệu đầy đủ: cả cây React bị dỡ, kéo theo `PlaybackEngines` gắn
+            trong layout `(app)` — tức là đang nghe nhạc mà bấm sang trang 2 thì nhạc
+            đứt. Trên Windows còn tệ hơn: engine Rust giữ tiếng độc lập với WebView,
+            nên tiếng có thể vẫn chạy vào một giao diện đã quên mất nó.
+          */}
           {pageNumber > 1 ? (
-            <a
+            <Link
               href={`/tracks?page=${pageNumber - 1}`}
               className="text-muted-foreground transition-colors hover:text-accent-text"
             >
               ← Trang trước
-            </a>
+            </Link>
           ) : (
             <span />
           )}
           {pageNumber < totalPages && (
-            <a
+            <Link
               href={`/tracks?page=${pageNumber + 1}`}
               className="text-muted-foreground transition-colors hover:text-accent-text"
             >
               Trang sau →
-            </a>
+            </Link>
           )}
         </nav>
       )}
