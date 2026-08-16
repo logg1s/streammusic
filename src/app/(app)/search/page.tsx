@@ -67,7 +67,7 @@ export default async function SearchPage({
         {results.tracks.length > 0 && (
           <section>
             <h2 className="eyebrow mb-3">Bài hát</h2>
-            <TrackList tracks={results.tracks} />
+            <TrackList tracks={results.tracks} radioOnTap />
           </section>
         )}
 

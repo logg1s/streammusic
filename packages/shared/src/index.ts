@@ -57,7 +57,11 @@ export type {
   PlayerStoreOptions,
 } from "./player-store";
 
-export { REFILL_THRESHOLD, createRadioClient } from "./radio-client";
+export {
+  REFILL_THRESHOLD,
+  autoplaySeed,
+  createRadioClient,
+} from "./radio-client";
 export type {
   PlayedTrack,
   RadioClient,

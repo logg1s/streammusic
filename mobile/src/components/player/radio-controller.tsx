@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   REFILL_THRESHOLD,
+  autoplaySeed,
   createRadioClient,
   type PlayableTrack,
   type PlayedTrack,
@@ -65,6 +66,8 @@ function snapshot(track: PlayableTrack): PlayedTrack {
 export function RadioController() {
   /** Chặn hai request chồng nhau: store phát state nhiều lần trong lúc chờ mạng. */
   const refillingRef = useRef(false);
+  /** Chặn nhiều lần tự-khởi-động radio trong lúc lô đầu đang về. */
+  const startingRef = useRef(false);
   const lastRef = useRef<PlayedTrack | null>(null);
 
   useEffect(() => {
@@ -104,6 +107,18 @@ export function RadioController() {
           radioState.seedId,
           queue.map((t) => t.id),
         );
+      }
+
+      // Autoplay: hàng đợi thường sắp hết → biến nó thành radio để nghe không đứt.
+      // `startRadioFor(seed)` giữ nguyên bài đang phát rồi nối lô đầu; nhánh refill lo tiếp.
+      if (!startingRef.current && !refillingRef.current) {
+        const seed = autoplaySeed(state);
+        if (seed) {
+          startingRef.current = true;
+          void startRadioFor(seed).finally(() => {
+            startingRef.current = false;
+          });
+        }
       }
     };
 

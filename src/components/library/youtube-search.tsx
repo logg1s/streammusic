@@ -59,6 +59,7 @@ export function YoutubeSearch({ query }: { query: string }) {
       {!error && tracks !== null && (
         <TrackList
           tracks={tracks}
+          radioOnTap
           emptyMessage="Không có kết quả trên YouTube."
         />
       )}

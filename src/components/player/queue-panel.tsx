@@ -30,6 +30,8 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
   const playTrackAt = usePlayer((s) => s.playTrackAt);
   const radio = usePlayer((s) => s.radio);
   const stopRadio = usePlayer((s) => s.stopRadio);
+  const autoplay = usePlayer((s) => s.autoplay);
+  const setAutoplay = usePlayer((s) => s.setAutoplay);
   const removeAt = usePlayer((s) => s.removeAt);
   const moveToNext = usePlayer((s) => s.moveToNext);
   const personalized = useRadioConfig().personalized;
@@ -155,6 +157,15 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
 
           {items.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setAutoplay(!autoplay)}
+                aria-pressed={autoplay}
+                title="Tự phát bài đề xuất khi hết hàng đợi"
+                className={cn(LINK_ACTION, autoplay && "text-accent-text")}
+              >
+                Tự phát tiếp: {autoplay ? "Bật" : "Tắt"}
+              </button>
               {radio && (
                 <button type="button" onClick={stopRadio} className={LINK_ACTION}>
                   Dừng radio
