@@ -104,6 +104,25 @@ export function PlaybackEngine() {
     const current = peekCurrentTrack();
     if (!current || current.id !== trackId) return;
 
+    // Next liền mạch: bài mới CHÍNH LÀ đuôi đã resolve sẵn và đã nằm trong hàng đợi
+    // native (effect 3 nối vào lúc bài trước đang chạy). Bấm Next trong app trước đây
+    // đi qua đây và resolve lại + dựng lại MediaSource — đứt tiếng dù đã có sẵn. Thay
+    // vào đó bảo ExoPlayer nhảy sang item nó đã chuẩn bị, đúng con đường mà tự-hết-bài
+    // và Next trên màn hình khoá vẫn dùng. `trackChanged` sẽ về nhưng store.position đã
+    // đúng (UI gọi store.next() trước) nên onTrackChanged bỏ qua — không nhảy hai lần.
+    if (nextIdRef.current === trackId && nextItemRef.current) {
+      loadedRef.current = trackId;
+      currentItemRef.current = nextItemRef.current;
+      nextIdRef.current = null;
+      nextItemRef.current = null;
+      void (async () => {
+        await VongAudio.skipNext();
+        // Giữ đúng ý muốn phát: skipNext không đổi playWhenReady, đây chỉ là bảo hiểm.
+        if (usePlayer.getState().isPlaying) await VongAudio.play();
+      })();
+      return;
+    }
+
     const store = usePlayer.getState();
     // Khôi phục chỗ đang nghe sau khi mở lại app: chỉ dùng đúng một lần.
     const positionSec = store.consumePendingSeek() ?? 0;

@@ -1,7 +1,7 @@
 import { requireUserId } from "@/lib/auth";
 import { jsonError, toErrorResponse } from "@/lib/http";
 import type { PlayableTrack } from "@vong/shared";
-import { persistHits, searchSongs } from "@/lib/youtube/music";
+import { persistHits, searchTracks } from "@/lib/youtube/music";
 import { normalizeKey } from "@vong/shared";
 
 export const runtime = "nodejs";
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       return Response.json({ tracks: hit.tracks });
     }
 
-    const tracks = await persistHits(await searchSongs(query, limit));
+    const tracks = await persistHits(await searchTracks(query, limit));
     cache.set(key, { at: Date.now(), tracks });
     return Response.json({ tracks });
   } catch (error) {
