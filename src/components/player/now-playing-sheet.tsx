@@ -47,6 +47,19 @@ export function NowPlayingSheet({
       aria-label="Đang phát"
       className="fixed inset-0 z-50 flex flex-col bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
     >
+      {/* Nền chìm: ảnh bìa phóng to + làm mờ, phủ gradient tan vào nền tối — màu bài
+          hát tràn ra sau chữ, đúng tinh thần đắm chìm. */}
+      {track.coverUrl && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div
+            className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl"
+            style={{ backgroundImage: `url("${track.coverUrl}")` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/75 to-background" />
+        </div>
+      )}
+
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between px-4 py-3">
         <button
           type="button"
@@ -79,7 +92,9 @@ export function NowPlayingSheet({
         </div>
 
         <div className="min-w-0 text-center">
-          <h2 className="truncate text-xl font-semibold">{track.title}</h2>
+          <h2 className="truncate text-2xl font-bold tracking-tight">
+            {track.title}
+          </h2>
           {track.artistId ? (
             <Link
               href={`/artists/${track.artistId}`}
@@ -108,6 +123,7 @@ export function NowPlayingSheet({
           </div>
           <VolumeControl className="justify-center" />
         </div>
+      </div>
       </div>
     </div>
   );

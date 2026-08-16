@@ -24,32 +24,34 @@
   --muted-foreground: #52525b;
   --subtle: #71717a;
 
-  /* --accent là màu NỀN của nút; dùng làm chữ thì tương phản không đạt AA.
-     --accent-text là biến thể dành riêng cho chữ trên nền trang. */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  /* Màu nhấn hồng (rose), đồng bộ với app Android. --accent là màu NỀN của nút; dùng
+     làm chữ thì tương phản không đạt AA, nên --accent-text là biến thể riêng cho chữ.
+     Ở nền sáng phải đậm hơn để đạt AA (#be123c ~5.9:1 trên trắng). */
+  --accent: #e11d48;
+  --accent-hover: #be123c;
   --accent-foreground: #ffffff;
-  --accent-text: #4338ca;
+  --accent-text: #be123c;
 
   --danger: #dc2626;
 }
 
 .dark {
-  --background: #09090b;
-  --surface: #18181b;
-  --surface-hover: #27272a;
+  /* Thang nền tối trùng khít app Android (theme.ts) để hai vỏ nhìn là một. */
+  --background: #0b0b0f;
+  --surface: #16161d;
+  --surface-hover: #1f1f29;
   --border: #27272a;
 
-  --foreground: #fafafa;
+  --foreground: #f4f4f5;
   --muted-foreground: #a1a1aa;
-  /* #71717a chỉ đạt 4.12 trên nền #09090b — dưới chuẩn AA cho chữ thường. */
+  /* #71717a chỉ đạt 4.12 trên nền tối — dưới chuẩn AA cho chữ thường. */
   --subtle: #8a8a94;
 
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
+  --accent: #f43f5e;
+  --accent-hover: #fb7185;
   --accent-foreground: #ffffff;
-  /* #6366f1 làm chữ chỉ đạt 4.45; bản sáng hơn này đạt ~8. */
-  --accent-text: #a5b4fc;
+  /* Hồng nhạt (rose-300) làm chữ trên nền tối, tương phản cao. */
+  --accent-text: #fda4af;
 
   --danger: #f87171;
 }

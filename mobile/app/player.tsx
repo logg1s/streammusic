@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Scrubber } from "@/components/player/scrubber";
@@ -64,13 +65,32 @@ export default function PlayerScreen() {
 
   const header = (
     <View style={styles.header}>
+      {/* Nền chìm: ảnh bìa phóng to + làm mờ, phủ gradient tan dần vào nền tối. Đây là
+          "hồn" của màn hình phát đắm chìm — màu của bài hát tràn ra sau chữ. */}
+      {track.coverUrl ? (
+        <View style={styles.headerBg} pointerEvents="none">
+          <Image
+            source={{ uri: track.coverUrl }}
+            style={StyleSheet.absoluteFill}
+            blurRadius={60}
+            contentFit="cover"
+            transition={240}
+          />
+          <LinearGradient
+            colors={["rgba(11,11,15,0.35)", "rgba(11,11,15,0.72)", colors.bg]}
+            locations={[0, 0.6, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      ) : null}
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Đóng màn hình phát"
         onPress={() => router.back()}
         style={styles.closeButton}
       >
-        <Ionicons name="chevron-down" size={24} color={colors.muted} />
+        <Ionicons name="chevron-down" size={24} color={colors.text} />
       </Pressable>
 
       <View style={styles.coverShadow}>
@@ -250,6 +270,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
   },
+  /** Nền chìm phủ hết vùng header (ảnh mờ + gradient), nằm dưới mọi nội dung. */
+  headerBg: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   closeButton: {
     alignSelf: "flex-start",
     minWidth: 44,
@@ -280,12 +308,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: font.xl,
-    fontWeight: "700",
+    fontSize: font.xxl,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
   artist: {
     color: colors.muted,
     fontSize: font.md,
+    fontWeight: "600",
     marginTop: spacing.xs,
   },
   error: {
