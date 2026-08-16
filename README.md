@@ -1,299 +1,296 @@
-# Vọng
+# Vọng 🎵
 
-Nghe nhạc từ kho lưu trữ đám mây của chính bạn — Google Drive, Dropbox, OneDrive.
-File không rời khỏi kho: ứng dụng chỉ đọc tag để dựng thư viện, rồi phát trực tiếp
-bằng HTTP range request.
+**Your music, where it already lives.** Vọng turns Google Drive, Dropbox and
+OneDrive into a personal streaming service — and treats YouTube as a
+first-class music source next to them. Nothing gets uploaded anywhere: the app
+reads your files' tags to build a library, then streams straight from your
+storage.
 
----
+One codebase, three apps:
 
-## Cách hoạt động
+| Platform | What you get |
+| --- | --- |
+| 🌐 **Web** | Full player in the browser — [streammusic.vercel.app](https://streammusic.vercel.app) |
+| 🪟 **Windows** | Native app, audio decoded in Rust, media-key & taskbar controls, survives minimising |
+| 🤖 **Android** | Native app, background playback with lock-screen controls — lock the phone, music keeps going |
 
-```
-Trình duyệt                  Ứng dụng (Vercel)              Kho lưu trữ
-    │                              │                              │
-    │  GET /api/stream/{trackId}   │                              │
-    ├─────────────────────────────►│                              │
-    │       + header Range         │  kiểm tra track thuộc user   │
-    │                              │  lấy access token (tự refresh)│
-    │                              │                              │
-    │                              │  Dropbox / OneDrive:         │
-    │                              ├──── xin link tạm thời ──────►│
-    │  ◄── 302 tới link đó ────────┤                              │
-    │  ─────────── tải thẳng, không qua server mình ─────────────►│
-    │                              │                              │
-    │                              │  Google Drive:               │
-    │                              ├─ GET ?alt=media + Bearer ───►│
-    │  ◄── 206 Partial Content ────┤◄──── stream byte ────────────┤
-```
-
-**Google Drive bắt buộc phải proxy** vì API của họ chỉ nhận header `Authorization`,
-không có link tạm thời tự xác thực. Dropbox và OneDrive đều cấp link ngắn hạn nên
-chỉ cần trả 302 — byte không đi qua máy chủ, không tốn băng thông.
-
-## Kiến trúc
-
-Mọi khác biệt giữa ba nhà cung cấp nằm gọn trong một interface duy nhất
-(`src/lib/providers/types.ts`). Scanner, endpoint stream và toàn bộ UI chỉ nói
-chuyện với interface đó — thêm S3 hay WebDAV sau này chỉ là viết thêm một file.
-
-```
-packages/shared/      code dùng chung cho cả ba vỏ (web · Windows · Android)
-src/
-  lib/providers/     types.ts · dropbox.ts · google-drive.ts · onedrive.ts
-  lib/metadata.ts    đọc tag ID3 qua range request (chỉ tải 2–25% file)
-  lib/scanner.ts     quét theo lô, ghi vào thư viện
-  lib/connections.ts lưu + tự refresh OAuth token (mã hoá AES-256-GCM)
-  app/api/stream/    endpoint phát nhạc: 302 hoặc proxy Range
-  app/api/native/    đăng nhập + cấp session JWT cho hai vỏ native
-  app/api/library/   endpoint JSON cho mobile (trang chủ, bài, album, nghệ sĩ, tìm)
-  components/player/ audio engine + thanh phát (sống ở layout, không ở page)
-src-tauri/           vỏ Windows: nhạc phát bằng Rust (rodio + symphonia) + SMTC
-mobile/              app Expo (Android) + Expo Module `vong-audio` (androidx.media3)
-```
-
-Thẻ `<audio>` nằm trong `src/app/(app)/layout.tsx`. App Router giữ nguyên layout
-khi điều hướng nên nhạc chạy liên tục lúc chuyển trang — nếu đặt trong page thì
-mỗi lần đổi trang là đứt nhạc.
-
-### Ba vỏ, một nguồn logic
-
-Trên web, khoá máy hoặc thu nhỏ cửa sổ là **mất tiếng** — iframe của YouTube không
-cho phát nền, và trình duyệt bóp cả thẻ `<audio>` khi tab bị ẩn. Đó là lý do có hai
-vỏ native, và cả hai đều **không nhúng lại UI mới**: chúng nạp đúng trang web đang
-chạy, chỉ thay phần phát nhạc bằng player của hệ điều hành.
-
-| | Phát nhạc | Điều khiển ngoài app |
-| --- | --- | --- |
-| Web | `<audio>` + iframe YouTube | `mediaSession` (chỉ khi tab còn sống) |
-| Windows (`src-tauri/`) | Rust: `rodio` + `symphonia` | SMTC (thanh media của Windows) |
-| Android (`mobile/`) | Kotlin: `androidx.media3` | `MediaSession` + notification |
-
-`packages/shared/` giữ những gì cả ba đều cần: store hàng đợi (zustand), client
-radio, và `player-request.ts` — chỗ xin URL audio của YouTube. URL đó **phải** xin
-từ máy người dùng: YouTube trả `LOGIN_REQUIRED` cho IP máy chủ Vercel, nên mỗi vỏ
-tự gọi InnerTube bằng đường mạng của mình.
+📦 **Download:** grab the Windows installer or the Android APK from
+[Releases](https://github.com/logg1s/streammusic/releases).
 
 ---
 
-## Cài đặt
+## Why this exists
 
-### 1. Database
+Streaming from a browser tab has two hard limits:
+
+1. **YouTube's iframe can't play in the background.** Lock your phone and the
+   music stops. YouTube also blocks server IPs from resolving audio, so no
+   server can do it for you.
+2. **Browsers throttle hidden tabs**, so even your own files stutter once the
+   window is minimised.
+
+The fix is not another web trick — it's native shells. The Windows and Android
+apps load the *same* web UI you already know, but swap the playback layer for
+the operating system's own player. Same interface, real background audio.
+
+## Quick start
+
+Just want to listen? Install from [Releases](https://github.com/logg1s/streammusic/releases)
+and sign in with Google. Done.
+
+Want to run your own instance? You need a Postgres database and a Google OAuth
+client:
 
 ```bash
+git clone https://github.com/logg1s/streammusic && cd streammusic
+npm install
+
+# 1. Database (Neon via Vercel, or bring your own DATABASE_URL)
 npm i -g vercel
 vercel link
 vercel integration add neon --yes --no-claim
 vercel env pull .env.local --yes
-```
+npm run db:push && npm run db:index
 
-Hoặc tự tạo Postgres ở đâu đó rồi điền `DATABASE_URL` vào `.env.local`.
+# 2. Fill AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET in .env.local (see "OAuth setup")
 
-```bash
-npm run db:push     # tạo bảng
-npm run db:index    # pg_trgm + index cho tìm kiếm
-```
-
-### 2. Ảnh bìa album (tuỳ chọn)
-
-Tạo một Blob store trong dashboard Vercel → Storage, rồi điền
-`BLOB_READ_WRITE_TOKEN`. Không có nó thì app vẫn chạy, chỉ là album không có bìa.
-
-### 3. OAuth
-
-`.env.local` đã có sẵn `ENCRYPTION_KEY` và `AUTH_SECRET` được sinh ngẫu nhiên.
-Còn lại phải đăng ký ở ba cổng developer:
-
-| Nhà cung cấp            | Nơi đăng ký                                                                | Redirect URI cần thêm                                               |
-| ----------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Google (đăng nhập)      | [console.cloud.google.com](https://console.cloud.google.com) → Credentials | `http://localhost:3000/api/auth/callback/google`                    |
-| Google Drive            | cùng OAuth client ở trên                                                   | `http://localhost:3000/api/connections/oauth/google_drive/callback` |
-| Dropbox                 | [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps)     | `http://localhost:3000/api/connections/oauth/dropbox/callback`      |
-| OneDrive                | [portal.azure.com](https://portal.azure.com) → App registrations           | `http://localhost:3000/api/connections/oauth/onedrive/callback`     |
-| YouTube (radio theo gu) | cùng OAuth client Google                                                   | `http://localhost:3000/api/youtube/oauth/callback`                  |
-
-Quyền cần bật cho Dropbox: `account_info.read`, `files.metadata.read`,
-`files.content.read`.
-
-Đăng nhập dùng Google, nên **`AUTH_GOOGLE_ID` và `AUTH_GOOGLE_SECRET` là bắt buộc**.
-Dropbox và OneDrive thì tuỳ chọn — provider nào chưa điền khoá sẽ tự ẩn khỏi giao diện.
-
-### 4. Chạy
-
-```bash
+# 3. Go
 npm run dev
 ```
 
+No OAuth keys yet? `npm run seed:demo` loads 8 public-domain tracks and prints
+a cookie that lets you into the app without Google — enough to try the whole
+library and player.
+
 ---
 
-## ⚠️ Google Drive: đọc trước khi dùng
+## How it works
 
-Để quét thư viện nhạc có sẵn, bắt buộc dùng scope `drive.readonly`. Google xếp nó
-vào nhóm **restricted scope**, kéo theo hai hệ quả thật:
+```
+Browser                      App (Vercel)                   Your storage
+    │                              │                              │
+    │  GET /api/stream/{trackId}   │                              │
+    ├─────────────────────────────►│                              │
+    │       + Range header         │  verify track belongs to user│
+    │                              │  fetch access token (auto-refresh)
+    │                              │                              │
+    │                              │  Dropbox / OneDrive:         │
+    │                              ├──── request temp link ──────►│
+    │  ◄── 302 to that link ───────┤                              │
+    │  ───────── downloads directly, bytes never touch us ───────►│
+    │                              │                              │
+    │                              │  Google Drive:               │
+    │                              ├─ GET ?alt=media + Bearer ───►│
+    │  ◄── 206 Partial Content ────┤◄──── byte stream ────────────┤
+```
 
-- **App ở trạng thái Testing** (mặc định): không cần verify, tối đa 100 test user —
-  nhưng **refresh token hết hạn sau 7 ngày**. Người dùng phải bấm "Cấp quyền lại"
-  mỗi tuần. Ứng dụng xử lý việc này đàng hoàng: kết nối chuyển sang trạng thái
-  `needs_reauth` và hiện nút cấp quyền lại, không sập.
-- **Muốn Published**: Google yêu cầu app verification kèm CASA security assessment
-  — tốn tiền và mất vài tuần.
-- **Có Google Workspace**: đặt consent screen là _Internal_ thì tránh được cả hai.
+- **Scanning is cheap.** Tags are read with HTTP range requests — measured at
+  **2% of the file for MP3, 25% for M4A**, never the whole thing.
+- **Streaming is direct.** Dropbox and OneDrive hand out short-lived links, so
+  the app answers with a 302 and gets out of the way. Google Drive is the one
+  provider that must be proxied (its API only accepts an `Authorization`
+  header).
+- **YouTube plays through the official IFrame Player** on the web, and through
+  on-device resolution + native decoding in the two apps (details below).
 
-`drive.file` không thay thế được vì scope đó chỉ thấy file do chính app tạo ra.
+## Architecture
 
-**Dropbox và OneDrive không có ràng buộc này.** Nếu chỉ muốn thử cho nhanh, nối
-Dropbox trước.
+Every provider difference hides behind one interface
+(`src/lib/providers/types.ts`). The scanner, the stream endpoint and the whole
+UI only talk to that interface — supporting S3 or WebDAV later means writing
+one more file.
+
+```
+packages/shared/      code shared by all three shells (web · Windows · Android)
+src/
+  lib/providers/     types.ts · dropbox.ts · google-drive.ts · onedrive.ts
+  lib/metadata.ts    reads ID3 tags via range requests
+  lib/scanner.ts     batched scanning, writes into the library
+  lib/connections.ts stores + auto-refreshes OAuth tokens (AES-256-GCM encrypted)
+  app/api/stream/    playback endpoint: 302 or Range proxy
+  app/api/native/    sign-in + session JWT for the two native shells
+  app/api/library/   JSON endpoints for mobile (home, tracks, albums, artists, search)
+  components/player/ audio engine + player bar (lives in the layout, not in pages)
+src-tauri/           Windows shell: audio decoded in Rust (rodio + symphonia) + SMTC
+mobile/              Expo app (Android) + `vong-audio` Expo Module (androidx.media3)
+```
+
+Two design decisions worth knowing:
+
+- **The `<audio>` pool lives in the layout** (`src/app/(app)/layout.tsx`), not
+  in a page. App Router keeps layouts mounted across navigation, so music
+  never cuts out when you browse.
+- **The native shells don't re-implement the UI.** They load the deployed web
+  app and replace only the audio path:
+
+  | | Playback | Controls outside the app |
+  | --- | --- | --- |
+  | Web | `<audio>` + YouTube iframe | `mediaSession` (while the tab lives) |
+  | Windows | Rust: `rodio` + `symphonia` | SMTC (Windows media bar) |
+  | Android | Kotlin: `androidx.media3` | `MediaSession` + notification |
+
+`packages/shared/` holds what all three need: the queue store (zustand), the
+radio client, and `player-request.ts` — the YouTube audio resolver. That URL
+**must** be requested from the user's machine: YouTube returns
+`LOGIN_REQUIRED` to server IPs, so each shell calls InnerTube over its own
+network.
+
+---
+
+## OAuth setup
+
+`.env.local` ships with randomly generated `ENCRYPTION_KEY` and `AUTH_SECRET`.
+The rest come from three developer consoles:
+
+| Provider                | Where to register                                                           | Redirect URI to add                                                  |
+| ----------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Google (sign-in)        | [console.cloud.google.com](https://console.cloud.google.com) → Credentials  | `http://localhost:3000/api/auth/callback/google`                     |
+| Google Drive            | same OAuth client as above                                                   | `http://localhost:3000/api/connections/oauth/google_drive/callback`  |
+| Dropbox                 | [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps)      | `http://localhost:3000/api/connections/oauth/dropbox/callback`       |
+| OneDrive                | [portal.azure.com](https://portal.azure.com) → App registrations            | `http://localhost:3000/api/connections/oauth/onedrive/callback`      |
+| YouTube (taste radio)   | same Google OAuth client                                                     | `http://localhost:3000/api/youtube/oauth/callback`                   |
+
+Dropbox permissions to enable: `account_info.read`, `files.metadata.read`,
+`files.content.read`.
+
+Sign-in goes through Google, so **`AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`
+are required**. Dropbox and OneDrive are optional — providers without keys
+hide themselves from the UI. For production, add the same redirect URIs with
+your production domain.
+
+### ⚠️ Google Drive, read before connecting
+
+Scanning your existing files requires the `drive.readonly` scope, which Google
+treats as **restricted**:
+
+- **Testing mode** (default): works with up to 100 test users, no verification
+  — but **refresh tokens expire every 7 days**. The app handles it gracefully
+  (the connection flips to `needs_reauth` and shows a re-authorize button),
+  still, you'll click that button weekly.
+- **Publishing** requires Google's app verification plus a CASA security
+  assessment — costs money, takes weeks.
+- **Google Workspace users**: set the consent screen to _Internal_ and both
+  problems disappear.
+
+**Dropbox and OneDrive have no such restriction.** For a quick test, connect
+Dropbox first.
 
 ---
 
 ## YouTube
 
-YouTube là nguồn nhạc chính thức của app, ngang hàng với kho lưu trữ:
+YouTube sits next to your storage as a full music source:
 
-- **Tìm bất cứ bài nào**: trang _Tìm kiếm_ có mục "Trên YouTube" bên dưới kết quả
-  thư viện. Mỗi dòng phát được ngay, chèn được vào hàng đợi, thêm được vào playlist.
-- **Radio tự dài ra**: bấm **Radio** ở một bài (thư viện hay YouTube) để nối tiếp
-  bài tương tự. Nguồn ứng viên là **automix của YouTube Music** — thứ YouTube tự
-  nối sau một bài — rồi xếp lại theo gu và lịch sử nghe trong app.
-- **Playlist thủ công**: sửa thứ tự bằng ▲▼, đổi tên ngay ở tiêu đề, trộn bài thư
-  viện với bài YouTube trong cùng một danh sách.
-- **Trang chủ**: "Nghe gần đây" (từ `play_events` của app) và các hàng gợi ý YouTube
-  Music trả về.
+- **Search any song** — the Search page shows an "On YouTube" section below
+  library results; every row plays instantly, queues, or joins a playlist.
+- **Radio that keeps going** — hit **Radio** on any track and the queue extends
+  itself with similar songs, sourced from YouTube Music's automix and re-ranked
+  by your in-app listening history.
+- **Mixed playlists** — library tracks and YouTube tracks in one list.
+- **Personalised home** — recently played plus YouTube Music suggestion rows.
 
-### Nguồn audio
+### How playback actually works (and why)
 
-Bài YouTube phát bằng **IFrame Player API** chính thức: một iframe nhìn thấy được,
-cắm sẵn từ lúc mở app nên cú bấm đầu tiên ra tiếng ngay (không phải chờ tải
-`iframe_api` rồi dựng iframe). Web **không** tự tải byte audio nữa.
+On the **web**, YouTube tracks play through the official IFrame Player API — a
+visible iframe, mounted at app start so the first click makes sound
+immediately. The web app never downloads audio bytes: YouTube blocks server
+IPs (`LOGIN_REQUIRED`, measured 2026-08, 3/3 videos) and Vercel's AUP forbids
+media proxying anyway. The price: an iframe can't play with the screen locked.
 
-Vì sao không còn đường proxy: `POST /youtubei/v1/player` trả `LOGIN_REQUIRED` cho IP
-máy chủ Vercel (đo 2026-08, 3/3 video) — chỉ máy người dùng, với IP dân dụng, resolve
-được. Cộng thêm AUP của Vercel cấm proxy/host media. Nên byte audio chỉ có thể do
-chính thiết bị của người dùng lấy.
+The **native shells** resolve the audio URL on-device (residential IP — works)
+and decode it themselves. One hard-won constraint applies to both:
+**googlevideo returns `403` unless every request carries a `Range` header
+spanning ≤ 1 MiB.** Stock players (ExoPlayer, AVURLAsset) omit `Range` on
+their first request, so both shells implement custom readers that slice
+requests into ≤ 1 MiB chunks.
 
-Cái giá: iframe cross-origin **không phát nền được** khi khoá máy hoặc thu nhỏ cửa
-sổ. Đó là lý do có hai vỏ native trong repo này — cả hai tự resolve trên máy rồi tự
-giải mã:
+Server-side InnerTube (`src/lib/youtube/resolve.ts`) is only used for
+metadata: search, automix, suggestions.
 
-| Vỏ | Phát bằng | Điều khiển ngoài app |
-| --- | --- | --- |
-| Windows (`src-tauri/`) | Rust: `rodio` + `symphonia` | SMTC |
-| Android (`mobile/`) | Kotlin: `androidx.media3` | MediaSession + màn hình khoá |
+### Optional extras
 
-Điểm chung của cả hai, và là ràng buộc cứng: **googlevideo trả `403` khi request
-không có header `Range`, hoặc khi `Range` phủ quá 1 MiB.** ExoPlayer và AVURLAsset
-đều không gửi `Range` ở request đầu (`HttpUtil.buildRangeRequestHeader` trả `null`
-khi `position == 0 && length == C.LENGTH_UNSET`), nên không player sẵn có nào nạp
-thẳng URL googlevideo được — cả hai vỏ phải tự viết reader cắt lô ≤ 1 MiB.
+Everything below is optional — search, radio and suggestions work with zero
+credentials:
 
-`InnerTube` (`src/lib/youtube/resolve.ts`) phía server giờ **chỉ** còn dùng cho tìm
-kiếm, automix và hàng gợi ý trang chủ — những thứ chỉ đọc metadata.
-
-Điều khiển trên màn hình khoá / tai nghe của web dùng Media Session API, có cả thanh
-tua — nhưng chỉ cho bài thư viện.
-
-### Tài khoản & khoá API
-
-Cả hai đều **tuỳ chọn** — không có gì thì tìm kiếm, radio, gợi ý vẫn chạy (InnerTube
-không cần credential và không tốn quota):
-
-1. **Nối tài khoản YouTube** ở _Cài đặt → Kho lưu trữ → Gu nhạc YouTube_: thêm phần
-   cá nhân hoá theo video đã Thích và kênh đã Đăng ký. Dùng lại
-   `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`, cần redirect URI
-   `http://localhost:3000/api/youtube/oauth/callback` và scope
-   `https://www.googleapis.com/auth/youtube.readonly` (**sensitive**; refresh token
-   ở chế độ Testing sống 7 ngày, hết thì UI hiện "Cấp quyền lại").
-2. **`YOUTUBE_API_KEY`**: giờ chỉ còn cho mục "Đang thịnh hành"
-   (`videos.list?chart=mostPopular`, **1 unit**/lần, cache 6 giờ) và nhánh dò
-   playlist dự phòng khi automix quá mỏng. Không có key thì mục đó tự ẩn.
-3. **`YT_MUSIC_COOKIE`** (tuỳ chọn): cá nhân hoá hàng gợi ý trang chủ. Dùng **tài
-   khoản phụ** — export cookie từ cửa sổ ẩn danh rồi đóng vĩnh viễn cửa sổ đó, và
-   biết rằng YouTube có thể khoá tài khoản dùng theo cách này. Phiên InnerTube dùng
-   chung **không bao giờ** nhận cookie này (gắn cookie sẽ đẩy phiên sang `web`, kéo
-   theo DRM/SABR/PO token).
-
-**Quota**: `search.list` của Data API còn 100 lần/ngày mỗi project, nhưng app gần như
-không dùng nữa — tìm kiếm và automix đi qua InnerTube. Một lần đồng bộ gu nhạc ≈ 20
-unit. Quota tính cho project của credential thực gửi đi.
+1. **Connect a YouTube account** (_Settings → Storage → YouTube taste_) for
+   personalisation from your Likes and Subscriptions. Reuses the Google OAuth
+   client; scope `youtube.readonly` (sensitive — 7-day tokens in Testing
+   mode).
+2. **`YOUTUBE_API_KEY`** powers the "Trending" section (1 quota unit per call,
+   cached 6 hours). Without it, that section hides.
+3. **`YT_MUSIC_COOKIE`** personalises home suggestions. Use a **throwaway
+   account** — YouTube may lock accounts used this way. The shared InnerTube
+   session never receives this cookie.
 
 ---
 
-## Chi phí băng thông
+## Costs
 
-| Nguồn             | Byte đi qua Vercel                          |
-| ----------------- | ------------------------------------------- |
-| Dropbox, OneDrive | ~0 (302 redirect)                           |
-| Google Drive      | toàn bộ — khoảng 60–100 MB cho mỗi giờ nghe |
-| YouTube           | ~0 — byte đi thẳng từ googlevideo tới thiết bị |
+| Source            | Bytes through Vercel                          |
+| ----------------- | --------------------------------------------- |
+| Dropbox, OneDrive | ~0 (302 redirect)                              |
+| Google Drive      | everything — roughly 60–100 MB per hour played |
+| YouTube           | ~0 — bytes go straight from googlevideo to the device |
 
-Nếu Drive trở nên tốn kém, bước nâng cấp tiếp theo là cache những bài nghe nhiều
-sang Vercel Blob rồi phục vụ qua CDN.
+If Drive gets expensive, the upgrade path is caching hot tracks to Vercel Blob
+and serving them from the CDN.
 
 ---
 
-## Lệnh
+## Development
 
 ```bash
-npm run dev         # máy chủ phát triển
-npm run build       # build production
-npm run typecheck   # tsc --noEmit (cả web và packages/shared)
-npm run check:youtube  # xin URL audio YouTube từ máy này rồi đo tốc độ tải thật
-npm run tauri:dev   # app Windows (cần máy chủ phát triển đang chạy)
-npm run tauri:build # đóng gói .exe + bộ cài NSIS
-npm run db:push     # đồng bộ schema vào Postgres
-npm run db:studio   # xem dữ liệu bằng Drizzle Studio
-npm run db:index    # tạo extension + index tìm kiếm (chạy một lần sau db:push)
-npm run verify      # kiểm chứng mã hoá token + đọc tag qua range request
-npm run seed:demo   # nạp 8 bài nhạc công khai để thử thư viện + player khi chưa có OAuth
+npm run dev         # dev server
+npm run build       # production build
+npm run typecheck   # tsc --noEmit (web and packages/shared)
+npm run check:youtube  # resolve a YouTube audio URL from this machine, measure real speed
+npm run tauri:dev   # Windows app (needs the dev server running)
+npm run tauri:build # package .exe + NSIS installer
+npm run db:push     # sync schema into Postgres
+npm run db:studio   # browse data with Drizzle Studio
+npm run db:index    # create extension + search indexes (once, after db:push)
+npm run verify      # prove tag reads only fetch 2–25% of each file (no DB/OAuth needed)
+npm run seed:demo   # demo library without OAuth (add -- --clean to remove)
 ```
 
-App Android nằm trong workspace riêng:
+### Android
 
 ```bash
 cd mobile
-npx expo run:android   # build + cài development build (cần JDK 17 + Android SDK 36)
-npm start              # Metro cho development build đã cài
+npx expo run:android   # build + install the development build (JDK 17 + Android SDK 36)
+npm start              # Metro for an already-installed development build
 ```
 
-Build release (APK ký thật, origin production — cài được lên máy thật, không cần Metro):
+Release build — signed, production origin, installs on a real device without
+Metro:
 
 ```bash
-cd mobile && npx expo prebuild --platform android   # sinh android/, plugin tự chèn signing
+cd mobile && npx expo prebuild --platform android   # generates android/, signing auto-injected
 cd android && ./gradlew :app:assembleRelease \
   -PreactNativeArchitectures=arm64-v8a \
   -PVONG_UPLOAD_STORE_PASSWORD="$(cat ../credentials/keystore-pass.txt)"
-# ra file android/app/build/outputs/apk/release/app-release.apk
+# → android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Keystore nằm ở `mobile/credentials/vong-release.jks` (gitignore, đừng làm mất —
-mất là không cập nhật được app đã cài). Windows chú ý đường dẫn dài: tạo junction
-`mklink /J C:\vb <repo>` rồi build từ `C:\vb\mobile\android`.
+The keystore lives at `mobile/credentials/vong-release.jks` (gitignored — **do
+not lose it**, or installed apps can never be updated). On Windows, long paths
+break the native build: create a junction with `mklink /J C:\vb <repo>` and
+build from `C:\vb\mobile\android`.
 
-`npm run verify` không cần database hay OAuth. Nó tải tag của vài file nhạc công
-khai và in ra số byte thực sự tải về — dùng để xác nhận rằng việc quét không kéo
-cả file về. Kết quả đo thực tế: **2% với file MP3, 25% với file M4A, 5 request/bài**.
+### Library scanning internals
 
-`npm run seed:demo` cần database. Nó tạo một user demo, đọc tag thật từ vài file
-nhạc công khai, upload ảnh bìa lên Blob, rồi ghi sẵn URL vào `streamUrlCache` —
-đúng nhánh mà endpoint stream dùng cho Dropbox/OneDrive. Lệnh in ra một dòng
-`document.cookie = ...` để dán vào Console trình duyệt và vào app mà không cần
-Google. Dọn dẹp: `npm run seed:demo -- --clean`.
-
----
-
-## Quét thư viện
-
-Vercel giới hạn function ở 300 giây nên không thể đọc tag vài nghìn file trong một
-lần gọi. Việc quét chia thành các lô:
-
-```
-POST /api/scan              liệt kê file audio → đẩy vào hàng đợi scan_items
-POST /api/scan/{id}/step    xử lý 25 file (đọc song song 8) → trả tiến độ
-GET  /api/scan/{id}         trạng thái job
-```
-
-Trình duyệt gọi `step` lặp cho tới khi xong, nên thanh tiến độ là số thật và có
-thể dừng giữa chừng rồi quét tiếp. Lần quét thứ hai bỏ qua file có `remoteRev`
-không đổi nên nhanh hơn hẳn.
-
-Cần chạy nền mà không phải giữ tab mở? Đó là lúc thay `step` bằng
+Vercel caps functions at 300 s, so scanning is batched: `POST /api/scan`
+queues the files, the browser loops `POST /api/scan/{id}/step` (25 files per
+step, 8 read in parallel) until done. Progress is real, scans are resumable,
+and re-scans skip files whose `remoteRev` didn't change. To run scans without
+keeping a tab open, swap the `step` loop for
 [Vercel Workflow](https://vercel.com/docs/workflow).
+
+## Releases & CI
+
+- Every push/PR to `master`: typecheck + lint (`.github/workflows/ci.yml`).
+- Pushing a `v*` tag builds the signed APK + Windows installer and attaches
+  both to a GitHub Release (`.github/workflows/release.yml`). Repo secrets:
+  `ANDROID_KEYSTORE_BASE64`, `VONG_UPLOAD_STORE_PASSWORD`.
+- Manual fallback (no Actions needed): build locally, then
+  `gh release create vX.Y.Z <apk> <exe>`.
