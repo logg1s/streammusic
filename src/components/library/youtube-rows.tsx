@@ -61,7 +61,7 @@ export function YoutubeRows() {
       {sections.map((section) => (
         <section key={section.title}>
           <h2 className="eyebrow mb-3">{section.title}</h2>
-          <TrackList tracks={section.tracks.slice(0, 12)} />
+          <TrackList tracks={section.tracks.slice(0, 12)} radioOnTap />
         </section>
       ))}
     </>

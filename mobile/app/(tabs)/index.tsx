@@ -82,7 +82,7 @@ export default function HomeScreen() {
         />
       ) : null}
 
-      <TrackSection label="Vừa nghe" tracks={data.played} limit={ROWS} />
+      <TrackSection label="Vừa nghe" tracks={data.played} limit={ROWS} radioOnTap />
       <TrackSection label="Mới thêm vào" tracks={data.recent} limit={ROWS} />
 
       {data.albums.length > 0 ? (
@@ -126,6 +126,7 @@ export default function HomeScreen() {
           label="Đang thịnh hành"
           tracks={trending.data.tracks}
           limit={ROWS}
+          radioOnTap
         />
       ) : null}
 
@@ -138,6 +139,7 @@ export default function HomeScreen() {
                 label={section.title}
                 tracks={section.tracks}
                 limit={YT_ROWS}
+                radioOnTap
               />
             ))
         : null}
@@ -161,10 +163,12 @@ function TrackSection({
   label,
   tracks,
   limit,
+  radioOnTap = false,
 }: {
   label: string;
   tracks: PlayableTrack[];
   limit: number;
+  radioOnTap?: boolean;
 }) {
   if (tracks.length === 0) return null;
 
@@ -177,6 +181,7 @@ function TrackSection({
           track={track}
           tracks={tracks}
           index={index}
+          radioOnTap={radioOnTap}
         />
       ))}
     </View>

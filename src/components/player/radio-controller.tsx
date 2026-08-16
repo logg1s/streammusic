@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { REFILL_THRESHOLD } from "@vong/shared";
+import { REFILL_THRESHOLD, autoplaySeed } from "@vong/shared";
 import type { PlayableTrack, PlayedTrack } from "@vong/shared";
-import { refillRadio, reportPlayed } from "@/lib/radio-client";
+import { refillRadio, reportPlayed, startRadioFor } from "@/lib/radio-client";
 import { usePlayer, type PlayerState } from "@/store/player";
 
 /**
@@ -31,6 +31,8 @@ function snapshot(track: PlayableTrack): PlayedTrack {
 export function RadioController() {
   /** Chặn hai request chồng nhau: store phát state nhiều lần trong lúc chờ mạng. */
   const refillingRef = useRef(false);
+  /** Chặn nhiều lần tự-khởi-động radio trong lúc lô đầu đang về. */
+  const startingRef = useRef(false);
   const lastRef = useRef<PlayedTrack | null>(null);
 
   useEffect(() => {
@@ -66,6 +68,19 @@ export function RadioController() {
           radio.seedId,
           queue.map((t) => t.id),
         );
+      }
+
+      // Autoplay: hàng đợi thường sắp hết → biến nó thành radio để nghe không đứt.
+      // `startRadioFor(seed)` giữ nguyên bài đang phát (seed CHÍNH là nó) rồi nối lô đầu;
+      // từ đó nhánh refill ở trên tự lo phần còn lại.
+      if (!startingRef.current && !refillingRef.current) {
+        const seed = autoplaySeed(state);
+        if (seed) {
+          startingRef.current = true;
+          void startRadioFor(seed).finally(() => {
+            startingRef.current = false;
+          });
+        }
       }
     };
 

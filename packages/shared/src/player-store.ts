@@ -52,6 +52,12 @@ export interface PlayerState {
   muted: boolean;
   shuffle: boolean;
   repeat: RepeatMode;
+  /**
+   * Tự nối radio khi hàng đợi thường sắp hết (kiểu "Autoplay" của Spotify): bật thì
+   * một album/playlist/bài lẻ nghe hết sẽ tự chảy tiếp bằng bài đề xuất thay vì dừng.
+   * RadioController là nơi đọc cờ này; store chỉ giữ và lưu nó.
+   */
+  autoplay: boolean;
   error: string | null;
   /**
    * Vị trí cần tua tới ngay khi bài nạp xong, dùng để khôi phục sau khi tải lại trang.
@@ -75,6 +81,7 @@ export interface PlayerState {
   toggleMute: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  setAutoplay: (value: boolean) => void;
   clearQueue: () => void;
 
   startRadio: (seed: PlayableTrack) => void;
@@ -109,6 +116,7 @@ export type PersistedPlayerState = Pick<
   | "muted"
   | "shuffle"
   | "repeat"
+  | "autoplay"
   | "currentTime"
   | "radio"
 >;
@@ -173,6 +181,7 @@ export function createPlayerStore(
         muted: false,
         shuffle: false,
         repeat: "off",
+        autoplay: true,
         error: null,
         pendingSeek: null,
         radio: null,
@@ -298,6 +307,10 @@ export function createPlayerStore(
             one: "off",
           };
           set({ repeat: next[get().repeat] });
+        },
+
+        setAutoplay(value) {
+          set({ autoplay: value });
         },
 
         clearQueue() {
@@ -467,6 +480,7 @@ export function createPlayerStore(
           muted: s.muted,
           shuffle: s.shuffle,
           repeat: s.repeat,
+          autoplay: s.autoplay,
           currentTime: s.currentTime,
           radio: s.radio,
         }),

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { ErrorNote, Loading, Screen } from "@/components/screen";
 import { SectionHeader } from "@/components/section-header";
 import {
@@ -9,6 +9,7 @@ import {
 import { signOut } from "@/lib/api";
 import type { ConnectionsSummary } from "@/lib/dto";
 import { useApi } from "@/lib/use-api";
+import { usePlayer } from "@/store/player";
 import { colors, font, radius, spacing } from "@/theme";
 
 /**
@@ -21,9 +22,29 @@ export default function SettingsScreen() {
   const { data, error, loading, reload } = useApi<ConnectionsSummary>(
     "/api/connections",
   );
+  const autoplay = usePlayer((s) => s.autoplay);
+  const setAutoplay = usePlayer((s) => s.setAutoplay);
 
   return (
     <Screen scroll refreshing={loading} onRefresh={reload}>
+      <View style={styles.section}>
+        <SectionHeader label="Phát nhạc" />
+        <View style={styles.row}>
+          <View style={styles.rowBody}>
+            <Text style={styles.rowTitle}>Tự phát tiếp</Text>
+            <Text style={styles.rowMeta}>
+              Hết album/playlist thì tự phát bài đề xuất theo gu.
+            </Text>
+          </View>
+          <Switch
+            value={autoplay}
+            onValueChange={setAutoplay}
+            trackColor={{ true: colors.accent, false: colors.surfaceElevated }}
+            thumbColor={colors.text}
+          />
+        </View>
+      </View>
+
       {loading && data === null ? <Loading /> : null}
       {error !== null && data === null ? (
         <ErrorNote message={error} onRetry={reload} />

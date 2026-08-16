@@ -59,7 +59,7 @@ export default async function HomePage() {
         {played.length > 0 && (
           <section>
             <h2 className="eyebrow mb-3">Nghe gần đây</h2>
-            <TrackList tracks={played} />
+            <TrackList tracks={played} radioOnTap />
           </section>
         )}
 
