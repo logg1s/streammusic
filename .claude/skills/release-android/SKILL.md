@@ -40,10 +40,21 @@ hits the wrong host.
 
 ## Windows-specific gotchas
 
-- **260-char path limit** breaks C++ codegen (expo-router gesture-handler).
-  Fix: `mklink /J C:\vb <repo>` then build from `C:\vb\mobile\android`.
-- Gradle needs `ANDROID_HOME` (usually `C:\Users\<u>\AppData\Local\Android\Sdk`)
-  and JDK 17.
+- **260-char path limit** breaks the New-Arch C++ codegen (react-native-gesture-handler,
+  pulled by expo-router). New Arch is mandatory (reanimated 4 requires it), so it
+  can't be skipped. The `mklink /J C:\vb <repo>` junction does **NOT** help by
+  itself — Gradle canonicalises the junction back to the real path, and the codegen
+  object path is ~300 chars regardless. Two things are BOTH required:
+  1. **Enable long paths** (system, needs admin, one-time):
+     `reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f`
+  2. **Use ninja ≥ 1.11** — the SDK's CMake 3.22.1 bundles ninja **1.10.2**, whose
+     hardcoded 260 check ignores the registry flag. Swap in a newer ninja (VS 2022
+     ships 1.12.1 at `…\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe`):
+     `cp "<vs>/ninja.exe" "$ANDROID_HOME/cmake/3.22.1/bin/ninja.exe"` (back up first).
+  After both, stop stale daemons (`gradlew --stop`) and wipe `app/.cxx` so CMake
+  reconfigures, then build. A daemon started before the flag won't honour it.
+- Gradle needs `ANDROID_HOME` (usually `C:\Users\<u>\AppData\Local\Android\Sdk`).
+  JDK 17 is ideal; JDK 21 also builds fine.
 - If rustc/gradle run concurrently the machine can OOM — build one at a time,
   or cap with `CARGO_BUILD_JOBS=4`.
 
