@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { REFILL_THRESHOLD, autoplaySeed } from "@vong/shared";
 import type { PlayableTrack, PlayedTrack } from "@vong/shared";
+import { getPlaybackAnalytics } from "@/lib/analytics";
 import { refillRadio, reportPlayed, startRadioFor } from "@/lib/radio-client";
 import { usePlayer, type PlayerState } from "@/store/player";
 
@@ -76,6 +77,9 @@ export function RadioController() {
       if (!startingRef.current && !refillingRef.current) {
         const seed = autoplaySeed(state);
         if (seed) {
+          // Store không phân biệt được radio tự bật với radio do người dùng bấm, mà đó
+          // lại chính là con số kiểm chứng quyết định autoplay-mặc-định.
+          getPlaybackAnalytics()?.noteRadioTrigger("autoplay");
           startingRef.current = true;
           void startRadioFor(seed).finally(() => {
             startingRef.current = false;

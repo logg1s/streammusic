@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TrackList } from "@/components/library/track-list";
+import { getAnalytics } from "@/lib/analytics";
 import type { PlayableTrack } from "@vong/shared";
 
 /**
@@ -36,7 +37,13 @@ export function YoutubeSearch({ query }: { query: string }) {
           setError(body.error ?? "Không tìm được trên YouTube.");
           return;
         }
-        setTracks(body.tracks ?? []);
+        const found = body.tracks ?? [];
+        setTracks(found);
+        // Chỉ đếm, KHÔNG kèm từ khoá — xem docs/product/telemetry.md.
+        getAnalytics()?.track("search_run", {
+          results: found.length,
+          hasYoutube: found.length > 0,
+        });
       })
       .catch(() => {
         if (!cancelled) setError("Không kết nối được tới YouTube.");

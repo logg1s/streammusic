@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { getAnalytics } from "@/lib/analytics";
+import { getAnalytics, getPlaybackAnalytics } from "@/lib/analytics";
+import { usePlayer } from "@/store/player";
 
 /**
  * Vòng đời telemetry của vỏ web: khởi tạo, đánh dấu mở app, đẩy bộ đệm định kỳ và
@@ -47,11 +48,33 @@ export function AnalyticsProvider() {
     window.addEventListener("pagehide", endSession);
     const timer = window.setInterval(() => void analytics.flush(), FLUSH_MS);
 
+    // Sự kiện phát nhạc suy ra từ store, không gọi từ trong các engine — chạm vào engine
+    // là chạm vào nơi BẤT BIẾN 1 sống, và đó cũng là vùng script tripwire không thấy gì.
+    // Cùng khuôn mẫu mà RadioController đang dùng.
+    const playback = getPlaybackAnalytics();
+    const unsubscribe = playback
+      ? usePlayer.subscribe((s) => {
+          const track = s.queue[s.order[s.position]] ?? null;
+          playback.observe({
+            trackId: track?.id ?? null,
+            source: track?.source ?? null,
+            durationSec: track?.durationSec ?? null,
+            currentTime: s.currentTime,
+            isPlaying: s.isPlaying,
+            queueLength: s.queue.length,
+            radioActive: s.radio !== null,
+            radioSeedId: s.radio?.seedId ?? null,
+            error: s.error,
+          });
+        })
+      : undefined;
+
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", endSession);
       window.clearInterval(timer);
+      unsubscribe?.();
     };
   }, []);
 

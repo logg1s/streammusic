@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
-import { getAnalytics } from "@/lib/analytics";
+import { getAnalytics, getPlaybackAnalytics } from "@/lib/analytics";
+import { usePlayer } from "@/store/player";
 
 /**
  * Vòng đời telemetry của vỏ Android. Không render gì.
@@ -34,10 +35,30 @@ export function AnalyticsProvider() {
 
     const timer = setInterval(() => void analytics.flush(), FLUSH_MS);
 
+    // Suy ra từ store thay vì gọi trong `playback-engine.tsx`: file đó là cầu nối DUY
+    // NHẤT được phép gọi `VongAudio`, và thêm việc vào đấy là thêm rủi ro cho đúng chỗ
+    // BẤT BIẾN 1 sống.
+    const playback = getPlaybackAnalytics();
+    const unsubscribe = usePlayer.subscribe((s) => {
+      const track = s.queue[s.order[s.position]] ?? null;
+      playback.observe({
+        trackId: track?.id ?? null,
+        source: track?.source ?? null,
+        durationSec: track?.durationSec ?? null,
+        currentTime: s.currentTime,
+        isPlaying: s.isPlaying,
+        queueLength: s.queue.length,
+        radioActive: s.radio !== null,
+        radioSeedId: s.radio?.seedId ?? null,
+        error: s.error,
+      });
+    });
+
     return () => {
       cancelled = true;
       sub.remove();
       clearInterval(timer);
+      unsubscribe();
     };
   }, []);
 

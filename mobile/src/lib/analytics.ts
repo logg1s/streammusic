@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import { createAnalytics, type Analytics } from "@vong/shared";
+import {
+  createAnalytics,
+  createPlaybackAnalytics,
+  type Analytics,
+  type PlaybackAnalytics,
+} from "@vong/shared";
 import { ORIGIN } from "@/lib/api";
 
 /**
@@ -15,6 +20,7 @@ import { ORIGIN } from "@/lib/api";
  */
 
 let instance: Analytics | null = null;
+let playback: PlaybackAnalytics | null = null;
 
 export function getAnalytics(): Analytics {
   instance ??= createAnalytics({
@@ -28,4 +34,15 @@ export function getAnalytics(): Analytics {
     },
   });
   return instance;
+}
+
+/**
+ * Bộ suy diễn sự kiện phát nhạc, dùng chung một thể hiện.
+ *
+ * Phải là singleton: nó giữ ảnh chụp trạng thái trước để so sánh, nên hai thể hiện song
+ * song sẽ đếm mỗi lần đổi bài thành hai lần.
+ */
+export function getPlaybackAnalytics(): PlaybackAnalytics {
+  playback ??= createPlaybackAnalytics({ analytics: getAnalytics() });
+  return playback;
 }

@@ -35,9 +35,9 @@ leaves the project's own infrastructure.
 | --- | --- | --- |
 | `app_open` | App starts | `cold` |
 | `session_end` | App backgrounded or closed | `sec`, `tracks` |
-| `play_start` | Audio starts for a track | `source` (library/youtube), `origin` (search/recent/album/playlist/radio/queue), `ttfaMs` |
-| `play_end` | Track stops or is switched | `playedSec`, `durationSec`, `completed`, `skippedEarly` |
-| `radio_seed` | A radio queue is seeded | `trigger` (tap/autoplay/button) |
+| `play_start` | The clock actually moves for a track — not when play is pressed | `source` (library/youtube), `origin` (radio/queue), `ttfaMs` |
+| `play_end` | Track stops or is switched | `playedSec`, `durationSec`, `origin`, `source`, `completed`, `skippedEarly` |
+| `radio_seed` | A radio queue is seeded | `trigger` (autoplay/manual) |
 | `radio_refill` | Radio appends a batch | `added` |
 | `queue_end` | Queue runs out without continuing | `depth` |
 | `resolve_fail` | YouTube audio URL resolution fails | `reason` |

@@ -20,6 +20,7 @@ import {
 } from "@/components/screen";
 import { SectionHeader } from "@/components/section-header";
 import { TrackRow } from "@/components/track-row";
+import { getAnalytics } from "@/lib/analytics";
 import { apiJson } from "@/lib/api";
 import type { SearchResult, TrackList } from "@/lib/dto";
 import { errorMessage, useApi } from "@/lib/use-api";
@@ -79,7 +80,13 @@ export default function SearchScreen() {
       body: JSON.stringify({ q: query }),
     })
       .then((result) => {
-        if (alive) setDone({ query, tracks: result.tracks, error: null });
+        if (!alive) return;
+        setDone({ query, tracks: result.tracks, error: null });
+        // Chỉ đếm, KHÔNG kèm từ khoá — xem docs/product/telemetry.md.
+        getAnalytics().track("search_run", {
+          results: result.tracks.length,
+          hasYoutube: result.tracks.length > 0,
+        });
       })
       .catch((cause: unknown) => {
         if (alive) setDone({ query, tracks: [], error: errorMessage(cause) });

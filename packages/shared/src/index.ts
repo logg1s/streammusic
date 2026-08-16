@@ -66,6 +66,9 @@ export type {
   AnalyticsStorage,
 } from "./analytics";
 
+export { createPlaybackAnalytics } from "./analytics-playback";
+export type { PlaybackAnalytics, PlaybackSnapshot } from "./analytics-playback";
+
 export { createPlayerStore } from "./player-store";
 export type {
   PersistedPlayerState,

@@ -1,6 +1,12 @@
 "use client";
 
-import { createAnalytics, type Analytics, type AnalyticsShell } from "@vong/shared";
+import {
+  createAnalytics,
+  createPlaybackAnalytics,
+  type Analytics,
+  type AnalyticsShell,
+  type PlaybackAnalytics,
+} from "@vong/shared";
 import { APP_VERSION } from "@/lib/version";
 
 /**
@@ -15,6 +21,7 @@ import { APP_VERSION } from "@/lib/version";
  */
 
 let instance: Analytics | null = null;
+let playback: PlaybackAnalytics | null = null;
 
 function detectShell(): AnalyticsShell {
   // Giống hệt phép kiểm trong native-audio-engine.tsx — cùng một tín hiệu, cố ý không
@@ -50,4 +57,17 @@ export function getAnalytics(): Analytics | null {
     },
   });
   return instance;
+}
+
+/**
+ * Bộ suy diễn sự kiện phát nhạc, dùng chung một thể hiện.
+ *
+ * Phải là singleton: nó giữ ảnh chụp trạng thái trước đó để so sánh, nên hai thể hiện
+ * song song sẽ đếm mỗi lần đổi bài thành hai lần.
+ */
+export function getPlaybackAnalytics(): PlaybackAnalytics | null {
+  const analytics = getAnalytics();
+  if (!analytics) return null;
+  playback ??= createPlaybackAnalytics({ analytics });
+  return playback;
 }

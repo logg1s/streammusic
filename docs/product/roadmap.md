@@ -45,11 +45,13 @@ people guessing.
 
 - [x] Anonymous event pipeline: `analytics_events`, `POST /api/events`, shared client
 - [x] Metric definitions and queries (`docs/product/metrics.md`, `scripts/metrics/`)
-- [x] Settings opt-out switch on web and Android; `app_open`, `session_end`, `setting_change` wired
-- [ ] The remaining 8 events — `play_start` (with `ttfaMs`), `play_end`, `radio_seed`,
-      `radio_refill`, `queue_end`, `resolve_fail`, `playback_error`, `search_run`. Until
-      these exist, radio quality and reliability report zero, not "fine"
-- [ ] Run `npm run db:migrate` so `analytics_events` exists in production
+- [x] Settings opt-out switch on web and Android
+- [x] All 11 events wired on web, Android and Windows. Playback events are derived from
+      the player store by a shared subscriber rather than called from inside the engines —
+      the engines are where invariant 1 lives and where the tripwire is blind
+- [x] `analytics_events` live in production, ingest smoke-tested end to end
+- [ ] Finer `origin` than radio-vs-queue (search / recent / album / playlist) — needs work
+      at each play call site, deferred until the coarse split proves insufficient
 - [ ] Four weekly reviews to establish baselines
 
 CI now enforces what this project claims to enforce: `npm test`, `cargo clippy -D

@@ -110,6 +110,11 @@ const files = walk(ROOT)
   .map((f) => rel(f))
   // Ambient type declarations describe an API, they do not call it.
   .filter((path) => !path.endsWith(".d.ts"))
+  // Tests ship nothing and make no requests. They do the opposite: they quote the banned
+  // strings on purpose as fixtures — analytics-playback.test.ts asserts that a
+  // googlevideo URL never escapes in an error label, and matching it there would punish
+  // the test for testing the rule.
+  .filter((path) => !/\.test\.(ts|tsx|js|jsx)$/.test(path))
   .map((path) => ({
     path,
     get lines() {
