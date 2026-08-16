@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -7,6 +8,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -81,10 +83,11 @@ export default function PlayerScreen() {
         <Text style={styles.emptyText}>Chưa có bài nào trong hàng đợi.</Text>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="Đóng màn hình phát"
           onPress={() => router.back()}
           style={styles.closeButton}
         >
-          <Text style={styles.closeLabel}>Đóng</Text>
+          <Ionicons name="chevron-down" size={24} color={colors.muted} />
         </Pressable>
       </View>
     );
@@ -102,21 +105,23 @@ export default function PlayerScreen() {
         onPress={() => router.back()}
         style={styles.closeButton}
       >
-        <Text style={styles.closeLabel}>⌄</Text>
+        <Ionicons name="chevron-down" size={24} color={colors.muted} />
       </Pressable>
 
-      {track.coverUrl ? (
-        <Image
-          source={{ uri: track.coverUrl }}
-          style={styles.cover}
-          contentFit="cover"
-          transition={160}
-        />
-      ) : (
-        <View style={[styles.cover, styles.coverEmpty]}>
-          <Text style={styles.coverGlyph}>♪</Text>
-        </View>
-      )}
+      <View style={styles.coverShadow}>
+        {track.coverUrl ? (
+          <Image
+            source={{ uri: track.coverUrl }}
+            style={styles.cover}
+            contentFit="cover"
+            transition={160}
+          />
+        ) : (
+          <View style={[styles.cover, styles.coverEmpty]}>
+            <Ionicons name="musical-notes" size={72} color={colors.subtle} />
+          </View>
+        )}
+      </View>
 
       <Text style={styles.title} numberOfLines={2}>
         {track.title}
@@ -160,9 +165,12 @@ export default function PlayerScreen() {
           onPress={() => usePlayer.getState().toggleShuffle()}
           style={styles.sideButton}
         >
-          <Text style={[styles.sideGlyph, shuffle && styles.activeGlyph]}>
-            ⇄
-          </Text>
+          <Ionicons
+            name="shuffle"
+            size={24}
+            color={shuffle ? colors.accent : colors.muted}
+          />
+          {shuffle ? <View style={styles.activeDot} /> : null}
         </Pressable>
 
         <Pressable
@@ -171,7 +179,7 @@ export default function PlayerScreen() {
           onPress={() => usePlayer.getState().previous()}
           style={styles.stepButton}
         >
-          <Text style={styles.stepGlyph}>◀◀</Text>
+          <Ionicons name="play-skip-back" size={30} color={colors.text} />
         </Pressable>
 
         <Pressable
@@ -180,9 +188,16 @@ export default function PlayerScreen() {
           onPress={() => usePlayer.getState().toggle()}
           style={styles.playButton}
         >
-          <Text style={styles.playGlyph}>
-            {isBuffering && isPlaying ? "…" : isPlaying ? "▮▮" : "▶"}
-          </Text>
+          {isBuffering && isPlaying ? (
+            <ActivityIndicator color={accentText} />
+          ) : (
+            <Ionicons
+              name={isPlaying ? "pause" : "play"}
+              size={32}
+              color={accentText}
+              style={isPlaying ? undefined : styles.playNudge}
+            />
+          )}
         </Pressable>
 
         <Pressable
@@ -191,7 +206,7 @@ export default function PlayerScreen() {
           onPress={() => usePlayer.getState().next()}
           style={styles.stepButton}
         >
-          <Text style={styles.stepGlyph}>▶▶</Text>
+          <Ionicons name="play-skip-forward" size={30} color={colors.text} />
         </Pressable>
 
         <Pressable
@@ -206,11 +221,16 @@ export default function PlayerScreen() {
           onPress={() => usePlayer.getState().cycleRepeat()}
           style={styles.sideButton}
         >
-          <Text
-            style={[styles.sideGlyph, repeat !== "off" && styles.activeGlyph]}
-          >
-            {repeat === "one" ? "↻1" : "↻"}
-          </Text>
+          <Ionicons
+            name="repeat"
+            size={24}
+            color={repeat !== "off" ? colors.accent : colors.muted}
+          />
+          {repeat === "one" ? (
+            <Text style={styles.repeatBadge}>1</Text>
+          ) : repeat !== "off" ? (
+            <View style={styles.activeDot} />
+          ) : null}
         </Pressable>
       </View>
 
@@ -240,11 +260,17 @@ export default function PlayerScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={() => usePlayer.getState().playTrackAt(orderPos)}
-            style={styles.queueRow}
+            style={[styles.queueRow, active && styles.queueRowActive]}
           >
-            <Text style={[styles.queueIndex, active && styles.activeGlyph]}>
-              {active ? "▶" : String(orderPos + 1)}
-            </Text>
+            {active ? (
+              <View style={styles.queueIndex}>
+                <Ionicons name="volume-high" size={15} color={colors.accent} />
+              </View>
+            ) : (
+              <Text style={styles.queueIndexText}>
+                {String(orderPos + 1)}
+              </Text>
+            )}
             <View style={styles.queueMeta}>
               <Text
                 style={[styles.queueTitle, active && styles.activeGlyph]}
@@ -291,24 +317,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  closeLabel: {
-    color: colors.muted,
-    fontSize: font.xl,
+  coverShadow: {
+    // Bóng đổ chỉ ăn khi ảnh không bị `overflow: hidden` cắt — nên bọc ngoài.
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    marginBottom: spacing.xl,
+    shadowColor: "#000",
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 16,
   },
   cover: {
     width: "100%",
     aspectRatio: 1,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
-    marginBottom: spacing.xl,
   },
   coverEmpty: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  coverGlyph: {
-    color: colors.subtle,
-    fontSize: font.xxl,
   },
   title: {
     color: colors.text,
@@ -333,7 +361,7 @@ const styles = StyleSheet.create({
   scrubberTrack: {
     height: 4,
     borderRadius: radius.full,
-    backgroundColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
     overflow: "hidden",
   },
   scrubberFill: {
@@ -346,7 +374,12 @@ const styles = StyleSheet.create({
     height: 14,
     marginLeft: -7,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.text,
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   times: {
     flexDirection: "row",
@@ -370,9 +403,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sideGlyph: {
-    color: colors.muted,
-    fontSize: font.lg,
+  /** Chấm nhỏ dưới icon shuffle/repeat, báo trạng thái đang bật. */
+  activeDot: {
+    position: "absolute",
+    bottom: 4,
+    width: 4,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
+  /** Số "1" nhỏ đè góc icon repeat khi lặp một bài. */
+  repeatBadge: {
+    position: "absolute",
+    top: 4,
+    right: 6,
+    color: colors.accent,
+    fontSize: 9,
+    fontWeight: "800",
   },
   activeGlyph: {
     color: colors.accent,
@@ -383,21 +430,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stepGlyph: {
-    color: colors.text,
-    fontSize: font.lg,
-  },
   playButton: {
-    width: 64,
-    height: 64,
+    width: 68,
+    height: 68,
     borderRadius: radius.full,
     backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: colors.accent,
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
   },
-  playGlyph: {
-    color: accentText,
-    fontSize: font.lg,
+  playNudge: {
+    marginLeft: 3,
   },
   queueHeading: {
     color: colors.subtle,
@@ -413,11 +460,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
   },
+  queueRowActive: {
+    backgroundColor: colors.accentSoft,
+  },
   queueIndex: {
+    width: 24,
+    alignItems: "center",
+  },
+  queueIndexText: {
     width: 24,
     textAlign: "center",
     color: colors.subtle,
     fontSize: font.sm,
+    fontVariant: ["tabular-nums"],
   },
   queueMeta: {
     flex: 1,

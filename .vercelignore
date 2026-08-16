@@ -1,0 +1,8 @@
+# Chỉ web app cần lên Vercel. Các vỏ native và sản phẩm build rất nặng (nhiều GB)
+# làm bước upload của `vercel deploy --archive=tgz` phình to vô ích.
+src-tauri
+mobile
+.shots
+.claude
+skills
+scripts/_code.mts

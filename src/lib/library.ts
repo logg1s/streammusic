@@ -4,11 +4,11 @@ import {
   count,
   desc,
   eq,
-  ilike,
   inArray,
   isNull,
   or,
   sql,
+  type AnyColumn,
 } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
@@ -338,6 +338,11 @@ export async function getArtist(userId: string, artistId: string) {
   return { artist, albums: artistAlbums, singles };
 }
 
+/** `unaccent(x) ILIKE unaccent(term)` — so khớp bỏ dấu ở cả hai phía. */
+function foldedLike(column: AnyColumn, term: string) {
+  return sql`unaccent(${column}) ILIKE unaccent(${term})`;
+}
+
 export async function searchLibrary(
   userId: string,
   query: string,
@@ -345,16 +350,20 @@ export async function searchLibrary(
   const term = `%${query.trim()}%`;
   if (query.trim().length === 0) return { tracks: [], albums: [] };
 
+  // Người Việt gõ không dấu là chuyện thường ("xau" phải ra "Xấu"), nên mọi vế so
+  // khớp đều qua unaccent (extension tạo ở `npm run db:index`). Thư viện cỡ vài
+  // nghìn dòng, seq scan sau khi lọc theo user vẫn dưới một mili giây - không cần
+  // index biểu thức riêng.
   const foundTracks = await trackQuery()
     .where(
       and(
         eq(tracks.userId, userId),
         or(
-          ilike(tracks.title, term),
-          ilike(tracks.artistName, term),
-          ilike(tracks.albumName, term),
-          ilike(artists.name, term),
-          ilike(albums.title, term),
+          foldedLike(tracks.title, term),
+          foldedLike(tracks.artistName, term),
+          foldedLike(tracks.albumName, term),
+          foldedLike(artists.name, term),
+          foldedLike(albums.title, term),
         ),
       ),
     )
@@ -377,7 +386,7 @@ export async function searchLibrary(
     .where(
       and(
         eq(albums.userId, userId),
-        or(ilike(albums.title, term), ilike(artists.name, term)),
+        or(foldedLike(albums.title, term), foldedLike(artists.name, term)),
       ),
     )
     .groupBy(albums.id, artists.name)

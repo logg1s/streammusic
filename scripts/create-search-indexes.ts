@@ -10,6 +10,8 @@ import { neon } from "@neondatabase/serverless";
 const STATEMENTS = [
   `CREATE EXTENSION IF NOT EXISTS pg_trgm`,
 
+  `CREATE EXTENSION IF NOT EXISTS unaccent`,
+
   `CREATE INDEX IF NOT EXISTS tracks_title_trgm
      ON tracks USING gin (title gin_trgm_ops)`,
 

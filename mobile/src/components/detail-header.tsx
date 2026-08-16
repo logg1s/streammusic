@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { PlayableTrack } from "@vong/shared";
 import { Artwork } from "@/components/artwork";
 import { usePlayer } from "@/store/player";
@@ -42,6 +43,7 @@ export function DetailHeader({
             onPress={() => usePlayer.getState().playQueue(tracks, 0)}
             style={({ pressed }) => [styles.button, pressed && styles.pressed]}
           >
+            <Ionicons name="play" size={14} color={accentText} />
             <Text style={styles.buttonLabel}>{actionLabel}</Text>
           </Pressable>
         ) : null}
@@ -73,6 +75,9 @@ const styles = StyleSheet.create({
   },
   button: {
     alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     backgroundColor: colors.accent,
     borderRadius: radius.full,
     paddingHorizontal: spacing.lg,

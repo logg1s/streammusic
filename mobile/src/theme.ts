@@ -9,10 +9,14 @@
 export const colors = {
   bg: "#0b0b0f",
   surface: "#16161d",
+  /** Nền nổi hơn `surface` một bậc — thẻ, nút tròn, ô nhập trên surface. */
+  surfaceElevated: "#1f1f29",
   text: "#f4f4f5",
   muted: "#a1a1aa",
   subtle: "#71717a",
   accent: "#f43f5e",
+  /** Nền nhấn mờ cho trạng thái đang chọn/đang phát — accent 14% trên nền tối. */
+  accentSoft: "rgba(244, 63, 94, 0.14)",
   border: "#27272a",
 } as const;
 

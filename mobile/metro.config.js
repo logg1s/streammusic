@@ -9,7 +9,13 @@ const workspaceRoot = path.resolve(projectRoot, "..");
 
 const config = getDefaultConfig(projectRoot);
 
-config.watchFolders = [workspaceRoot];
+// Chỉ watch hai thư mục thật sự cần ở gốc repo. Watch cả gốc là Metro đi vào
+// `src-tauri/target/` — hàng chục nghìn file build Rust xuất hiện/biến mất liên tục,
+// watcher từng chết giữa phiên vì ENOENT ngay trong thư mục đó.
+config.watchFolders = [
+  path.resolve(workspaceRoot, "packages"),
+  path.resolve(workspaceRoot, "node_modules"),
+];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { Artwork } from "@/components/artwork";
 import { colors, font, layout, radius, spacing } from "@/theme";
 import { useCurrentTrack, usePlayer } from "@/store/player";
 
@@ -34,18 +35,7 @@ export function PlayerBar() {
       </View>
 
       <View style={styles.row}>
-        {track.coverUrl ? (
-          <Image
-            source={{ uri: track.coverUrl }}
-            style={styles.cover}
-            contentFit="cover"
-            transition={120}
-          />
-        ) : (
-          <View style={[styles.cover, styles.coverEmpty]}>
-            <Text style={styles.coverGlyph}>♪</Text>
-          </View>
-        )}
+        <Artwork url={track.coverUrl} name={track.title} size={44} />
 
         <View style={styles.meta}>
           <Text style={styles.title} numberOfLines={1}>
@@ -59,12 +49,18 @@ export function PlayerBar() {
         </View>
 
         <Pressable
-          style={styles.button}
+          style={styles.playButton}
           accessibilityRole="button"
           accessibilityLabel={isPlaying ? "Tạm dừng" : "Phát"}
           onPress={() => usePlayer.getState().toggle()}
         >
-          <Text style={styles.glyph}>{isPlaying ? "▮▮" : "▶"}</Text>
+          <Ionicons
+            name={isPlaying ? "pause" : "play"}
+            size={20}
+            color={colors.bg}
+            // Tam giác play của Ionicons lệch quang học sang trái một chút.
+            style={isPlaying ? undefined : styles.playNudge}
+          />
         </Pressable>
 
         <Pressable
@@ -73,7 +69,7 @@ export function PlayerBar() {
           accessibilityLabel="Bài sau"
           onPress={() => usePlayer.getState().next()}
         >
-          <Text style={styles.glyph}>▶▶</Text>
+          <Ionicons name="play-skip-forward" size={20} color={colors.text} />
         </Pressable>
       </View>
     </Pressable>
@@ -102,20 +98,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     gap: spacing.md,
   },
-  cover: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.sm,
-    backgroundColor: colors.bg,
-  },
-  coverEmpty: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverGlyph: {
-    color: colors.subtle,
-    fontSize: font.lg,
-  },
   meta: {
     flex: 1,
   },
@@ -129,14 +111,21 @@ const styles = StyleSheet.create({
     fontSize: font.xs,
     marginTop: 2,
   },
-  button: {
-    minWidth: 44,
-    height: 44,
+  playButton: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.text,
     alignItems: "center",
     justifyContent: "center",
   },
-  glyph: {
-    color: colors.text,
-    fontSize: font.md,
+  playNudge: {
+    marginLeft: 2,
+  },
+  button: {
+    minWidth: 40,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { PlayableTrack } from "@vong/shared";
 import { ALBUM_CARD_WIDTH, AlbumCard } from "@/components/album-card";
 import {
@@ -108,17 +110,34 @@ export default function SearchScreen() {
   return (
     <Screen>
       <View style={styles.searchBar}>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Tên bài, nghệ sĩ hay album"
-          placeholderTextColor={colors.subtle}
-          style={styles.input}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          selectionColor={colors.accent}
-        />
+        <View style={styles.inputWrap}>
+          <Ionicons name="search" size={18} color={colors.subtle} />
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            placeholder="Tên bài, nghệ sĩ hay album"
+            placeholderTextColor={colors.subtle}
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            selectionColor={colors.accent}
+          />
+          {text.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Xoá từ khoá"
+              onPress={() => setText("")}
+              hitSlop={8}
+            >
+              <Ionicons
+                name="close-circle"
+                size={18}
+                color={colors.subtle}
+              />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView
@@ -209,12 +228,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  input: {
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+  },
+  input: {
+    flex: 1,
     color: colors.text,
     fontSize: font.md,
-    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   section: {
