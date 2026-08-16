@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest an idea for Vong.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        What gets *built* is decided through a scored backlog in
+        `docs/product/backlog.md` (see `docs/product/README.md`) — a
+        maintainer will triage this and add it there if it fits. Filling in
+        the fields below (especially the problem, not just the solution)
+        makes that triage much faster.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: >
+        Describe the problem from your point of view as a user, not the
+        solution yet. "I can't do X" is more useful than "add a button that
+        does Y".
+    validations:
+      required: true
+
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Which shell is this about?
+      options:
+        - Web
+        - Windows
+        - Android
+        - All shells
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What you'd like to happen
+      description: Your proposed solution, if you have one in mind.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Links, mockups, or examples from other apps, if relevant.

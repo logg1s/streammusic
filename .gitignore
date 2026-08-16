@@ -62,4 +62,11 @@ mobile/*.jks
 # anh chup man hinh may ao
 .shots/
 mobile/credentials/
+
+# release binaries — these belong on GitHub Releases, not in git
 /Vong_*.apk
+*.apk
+*.exe
+*.msi
+*.dmg
+*.AppImage

@@ -294,3 +294,19 @@ keeping a tab open, swap the `step` loop for
   `ANDROID_KEYSTORE_BASE64`, `VONG_UPLOAD_STORE_PASSWORD`.
 - Manual fallback (no Actions needed): build locally, then
   `gh release create vX.Y.Z <apk> <exe>`.
+
+## Contributing
+
+Bug reports, feature ideas and PRs are welcome — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the parts of this repo (workspace
+layout, generated `mobile/android/`, the verification commands) a generic
+guide wouldn't tell you. Security issues go through
+[`SECURITY.md`](SECURITY.md), not a public issue.
+
+## License
+
+[GNU AGPL v3.0](LICENSE). Because the web app is hosted, this means anyone
+who runs a modified version of Vong as a public service must make the source
+of their modifications available to its users — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md#license) for what that means in
+practice.
