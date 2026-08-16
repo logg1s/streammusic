@@ -27,6 +27,12 @@ interface TrackListProps {
   onRemove?: (track: PlayableTrack, index: number) => void;
   /** Có mặt thì mỗi dòng thêm nút ▲▼ đổi thứ tự — dùng ở trang playlist. */
   onMove?: (index: number, delta: number) => void;
+  /**
+   * Danh sách "bài lẻ" (nghe gần đây, kết quả tìm, gợi ý) — bấm một dòng là seed radio
+   * từ đúng bài đó thay vì phát cả danh sách. Ở album/playlist thì để tắt: bấm để phát
+   * xuyên suốt. Cần radio bật (luôn bật trên web); tắt thì rơi về phát cả danh sách.
+   */
+  radioOnTap?: boolean;
 }
 
 /* Nút phụ chỉ hiện khi trỏ vào dòng, nhưng luôn hiện khi được focus bằng bàn phím. */
@@ -47,6 +53,7 @@ export function TrackList({
   emptyMessage = "Chưa có bài nào ở đây.",
   onRemove,
   onMove,
+  radioOnTap = false,
 }: TrackListProps) {
   const radioEnabled = useRadioConfig().enabled;
   const playQueue = usePlayer((s) => s.playQueue);
@@ -59,6 +66,11 @@ export function TrackList({
     return <p className="py-8 text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
+  const onTap = (track: PlayableTrack, index: number) => {
+    if (radioOnTap && radioEnabled) startRadioFor(track);
+    else playQueue(tracks, index);
+  };
+
   return (
     <ol className="divide-y divide-border">
       {tracks.map((track, index) => {
@@ -67,7 +79,7 @@ export function TrackList({
           <li key={track.id} className="group/row flex items-center gap-1">
             <button
               type="button"
-              onClick={() => playQueue(tracks, index)}
+              onClick={() => onTap(track, index)}
               aria-current={isCurrent ? "true" : undefined}
               className={cn(
                 ROW_GRID,

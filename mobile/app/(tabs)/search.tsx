@@ -165,6 +165,7 @@ export default function SearchScreen() {
                 track={track}
                 tracks={libraryTracks}
                 index={index}
+                radioOnTap
               />
             ))}
           </View>
@@ -207,6 +208,7 @@ export default function SearchScreen() {
                 track={track}
                 tracks={youtube.tracks}
                 index={index}
+                radioOnTap
               />
             ))}
           </View>

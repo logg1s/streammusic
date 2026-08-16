@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { PlayableTrack } from "@vong/shared";
 import { Artwork } from "@/components/artwork";
 import { formatDuration, trackSubtitle } from "@/lib/format";
+import { startRadioFor } from "@/components/player/radio-controller";
 import { useIsCurrentTrack, usePlayer } from "@/store/player";
 import { colors, font, radius, spacing } from "@/theme";
 
@@ -15,23 +16,31 @@ export const TRACK_ROW_HEIGHT = 60;
  * chứ không chỉ một bài: nghe một bài giữa album rồi bài sau tự chạy tiếp là hành vi
  * người ta chờ đợi. Lệnh phát đi qua store dùng chung, không bao giờ gọi module native
  * trực tiếp.
+ *
+ * `radioOnTap` cho danh sách "bài lẻ" (nghe gần đây, kết quả tìm, gợi ý): bấm là seed
+ * radio từ đúng bài đó thay vì phát cả danh sách. Ở album/playlist thì để tắt.
  */
 export const TrackRow = memo(function TrackRow({
   track,
   tracks,
   index,
   showArtwork = true,
+  radioOnTap = false,
 }: {
   track: PlayableTrack;
   tracks: PlayableTrack[];
   index: number;
   showArtwork?: boolean;
+  radioOnTap?: boolean;
 }) {
   const isCurrent = useIsCurrentTrack(track.id);
 
   return (
     <Pressable
-      onPress={() => usePlayer.getState().playQueue(tracks, index)}
+      onPress={() => {
+        if (radioOnTap) void startRadioFor(track);
+        else usePlayer.getState().playQueue(tracks, index);
+      }}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
       {showArtwork ? (

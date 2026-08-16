@@ -1,4 +1,4 @@
-import type { PlayerStore } from "./player-store";
+import type { PlayerState, PlayerStore } from "./player-store";
 import type { FetchLike, PlayableTrack, TrackSource } from "./types";
 
 /**
@@ -15,6 +15,24 @@ import type { FetchLike, PlayableTrack, TrackSource } from "./types";
 const FIRST_BATCH = 12;
 /** Còn ngần này bài phía sau thì đi xin lô tiếp theo. */
 export const REFILL_THRESHOLD = 2;
+
+/**
+ * "Autoplay" kiểu Spotify: khi nào nên tự biến một hàng đợi thường (album/playlist/bài
+ * lẻ) thành radio để nghe không đứt quãng. Trả về bài dùng làm seed, hoặc null nếu chưa
+ * tới lúc. Cả web và app gọi đúng hàm này — lệch nhau là hai vỏ có hành vi khác nhau.
+ *
+ * Điều kiện: người dùng bật autoplay, chưa có radio nào chạy (radio đã có RadioController
+ * tự nạp thêm), KHÔNG đang lặp (lặp thì hàng đợi không bao giờ "hết" nên đừng cắt ngang),
+ * đang có bài phát, và đã tới sát cuối. Seed là bài đang phát ở khúc cuối đó — gu người
+ * dùng (taste profile phía server) lo phần "hợp với cả playlist".
+ */
+export function autoplaySeed(state: PlayerState): PlayableTrack | null {
+  if (!state.autoplay || state.radio || state.repeat !== "off") return null;
+  const { queue, order, position } = state;
+  if (order.length === 0) return null;
+  if (order.length - 1 - position > REFILL_THRESHOLD) return null;
+  return queue[order[position]] ?? null;
+}
 const REFILL_BATCH = 10;
 /** Nghe được ngần này phần bài thì tính là "nghe hết", ít hơn là "bỏ qua". */
 const FINISH_RATIO = 0.6;
