@@ -86,6 +86,20 @@ function fromTwoRowItem(item: YTNodes.MusicTwoRowItem): MusicHit | null {
   };
 }
 
+/** Video của tìm kiếm YouTube thường → MusicHit. Bỏ live/sắp phát (không có byte để nghe). */
+function fromVideo(item: YTNodes.Video): MusicHit | null {
+  if (!item.video_id) return null;
+  if (item.is_live || item.is_upcoming) return null;
+  return {
+    videoId: item.video_id,
+    rawTitle: item.title.toString(),
+    channelTitle: item.author?.name ?? "",
+    // `duration.seconds` là 0 với video ẩn thời lượng; đổi thành null để persistHits
+    // giữ lại thay vì loại theo khoảng thời lượng.
+    durationSec: item.duration?.seconds || null,
+  };
+}
+
 /**
  * Tìm bài trên YouTube Music. Kết quả đã là "bài hát", không phải video bất kỳ.
  *
@@ -111,6 +125,70 @@ export async function searchSongs(
     }
   }
   return hits;
+}
+
+/**
+ * Tìm trên YouTube THƯỜNG (không phải YouTube Music). Đây là thứ khiến kết quả "giống
+ * youtube.com": bản cover, live, lyric video, và rất nhiều nhạc Việt của kênh cá nhân
+ * không nằm trong catalog "song" của YT Music. persistHits sau đó lọc rác/độ dài.
+ */
+export async function searchVideos(
+  query: string,
+  limit: number,
+): Promise<MusicHit[]> {
+  const yt = await innertube();
+  const search = await yt.search(query, { type: "video" });
+  const hits: MusicHit[] = [];
+
+  for (const item of search.results?.filterType(YTNodes.Video) ?? []) {
+    const hit = fromVideo(item);
+    if (hit) hits.push(hit);
+    if (hits.length >= limit) break;
+  }
+  return hits;
+}
+
+/**
+ * Kết quả tìm kiếm hoàn chỉnh: catalog YT Music (metadata sạch, tách nghệ sĩ chuẩn) đứng
+ * trước, rồi phủ thêm YouTube thường cho đủ rộng. Gộp và bỏ trùng theo videoId; persistHits
+ * ở route lọc rác/độ dài lần cuối.
+ *
+ * Chạy hai nguồn song song: cả hai đều qua InnerTube nên không tốn quota Data API. Một
+ * nguồn hỏng (Google đổi giao thức) không được kéo cả tìm kiếm sập — nên mỗi nguồn tự cô
+ * lập lỗi, miễn nguồn kia còn trả bài.
+ */
+export async function searchTracks(
+  query: string,
+  limit: number,
+): Promise<MusicHit[]> {
+  const [songs, videos] = await Promise.all([
+    searchSongs(query, limit).catch((error) => {
+      console.warn("Tìm YT Music lỗi", error);
+      return [] as MusicHit[];
+    }),
+    searchVideos(query, limit).catch((error) => {
+      console.warn("Tìm YouTube thường lỗi", error);
+      return [] as MusicHit[];
+    }),
+  ]);
+
+  // Xen kẽ luân phiên thay vì nối đuôi: nếu đổ hết catalog trước, một từ khoá mà YT Music
+  // có sẵn sẽ đẩy toàn bộ kết quả YouTube thường ra khỏi trang — đúng thứ người dùng thấy
+  // thiếu. Xen kẽ để cả hai nguồn luôn có mặt, bài catalog (metadata sạch) vẫn đứng đầu.
+  const seen = new Set<string>();
+  const merged: MusicHit[] = [];
+  for (let i = 0; merged.length < limit; i++) {
+    const next = [songs[i], videos[i]].filter(
+      (hit): hit is MusicHit => hit !== undefined,
+    );
+    if (i >= songs.length && i >= videos.length) break;
+    for (const hit of next) {
+      if (merged.length >= limit || seen.has(hit.videoId)) continue;
+      seen.add(hit.videoId);
+      merged.push(hit);
+    }
+  }
+  return merged;
 }
 
 /**
