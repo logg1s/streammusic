@@ -66,6 +66,7 @@ agents in `.claude/agents/`. Simple questions and one-file edits need no harness
 | 2026-08-16 | Initial harness — 8 agents, 8 skills | `.claude/` | Product decisions and the hard invariants both depended on whoever happened to be reading |
 | 2026-08-16 | Product process moved into the repo | `docs/product/` | The roadmap lived in assistant memory, unreadable to contributors |
 | 2026-08-16 | Anonymous telemetry pipeline | `packages/shared`, `src/app/api/events` | Four stages shipped with no way to tell whether they worked |
+| 2026-08-16 | `deploy-web` no longer tells the reader to run `db:push` | `.claude/skills/deploy-web` | The skill contradicted a hard invariant on this very page, and aimed it at the production database |
 
 ## Workflows (see `.claude/skills/`)
 
