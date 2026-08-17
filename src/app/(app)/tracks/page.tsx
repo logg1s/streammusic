@@ -3,6 +3,7 @@ import { TrackList } from "@/components/library/track-list";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { getAllTracks, getLibraryStats } from "@/lib/library";
+import { formatNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function TracksPage({
         title="Bài hát"
         readout={
           stats.trackCount > 0
-            ? `${stats.trackCount} bài  ·  trang ${pageNumber}/${totalPages}`
+            ? `${formatNumber(stats.trackCount)} bài  ·  trang ${pageNumber}/${totalPages}`
             : undefined
         }
       />

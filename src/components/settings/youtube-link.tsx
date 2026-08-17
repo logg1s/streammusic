@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
+import { formatNumber } from "@/lib/utils";
 
 export interface YoutubeAccountView {
   channelTitle: string;
@@ -65,7 +66,7 @@ export function YoutubeLink({
                 {account.channelTitle}
               </p>
               <p className="readout mt-1">
-                {likedCount} bài đã thích · {artistCount} nghệ sĩ trong gu ·
+                {formatNumber(likedCount)} bài đã thích · {formatNumber(artistCount)} nghệ sĩ trong gu ·
                 đồng bộ {account.tasteSyncedAt ?? "chưa"}
               </p>
             </div>

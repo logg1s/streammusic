@@ -5,7 +5,7 @@ import { PlayAllButton } from "@/components/library/track-list";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { getPlaylist } from "@/lib/playlists";
-import { formatDuration } from "@/lib/utils";
+import { formatLongDuration, formatNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,7 @@ export default async function PlaylistPage({
           playlist.seedLabel ? `Radio · ${playlist.seedLabel}` : "Playlist"
         }
         title={playlist.name}
-        readout={`${tracks.length} bài  ·  ${formatDuration(totalSeconds)}`}
+        readout={`${formatNumber(tracks.length)} bài  ·  ${formatLongDuration(totalSeconds)}`}
         action={
           <div className="flex items-center gap-1">
             <PlaylistRename playlistId={playlist.id} name={playlist.name} />

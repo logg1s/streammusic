@@ -39,6 +39,14 @@ export {
 } from "./parse";
 
 export {
+  formatDuration,
+  formatLibraryStats,
+  formatLongDuration,
+  formatNumber,
+} from "./format";
+export type { LibraryStats } from "./format";
+
+export {
   LoginRequiredError,
   VideoUnplayableError,
   audioRangeHeaders,

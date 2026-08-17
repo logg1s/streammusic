@@ -82,8 +82,8 @@ export default function HomeScreen() {
         />
       ) : null}
 
-      <TrackSection label="Vừa nghe" tracks={data.played} limit={ROWS} radioOnTap />
-      <TrackSection label="Mới thêm vào" tracks={data.recent} limit={ROWS} />
+      <TrackSection label="Nghe gần đây" tracks={data.played} limit={ROWS} radioOnTap />
+      <TrackSection label="Vừa thêm vào" tracks={data.recent} limit={ROWS} />
 
       {data.albums.length > 0 ? (
         <View style={styles.section}>
@@ -157,7 +157,7 @@ export default function HomeScreen() {
  * Một dải bài.
  *
  * `tracks` truyền xuống `TrackRow` là **cả dải**, không phải phần đã cắt: bấm dòng thứ
- * ba của "Vừa nghe" thì phát tiếp tới hết dải, kể cả những bài chưa hiện ra.
+ * ba của "Nghe gần đây" thì phát tiếp tới hết dải, kể cả những bài chưa hiện ra.
  */
 function TrackSection({
   label,

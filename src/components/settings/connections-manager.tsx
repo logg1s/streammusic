@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, Folder, Loader2, Plus, RefreshCw, X } from "lucide-react";
 import type { StorageProviderId } from "@/db/schema";
 import { PROVIDER_LABEL } from "@/lib/provider-labels";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 
 interface RootView {
   id: string;
@@ -165,7 +165,7 @@ function ConnectionCard({ connection }: { connection: ConnectionView }) {
   const disconnect = async () => {
     if (
       !confirm(
-        `Ngắt ${connection.label}? Toàn bộ ${connection.trackCount} bài đã lập chỉ mục từ kho này sẽ bị xoá khỏi thư viện. File gốc trên kho không bị ảnh hưởng.`,
+        `Ngắt ${connection.label}? Toàn bộ ${formatNumber(connection.trackCount)} bài đã lập chỉ mục từ kho này sẽ bị xoá khỏi thư viện. File gốc trên kho không bị ảnh hưởng.`,
       )
     )
       return;
@@ -184,7 +184,7 @@ function ConnectionCard({ connection }: { connection: ConnectionView }) {
           <p className="readout">{PROVIDER_LABEL[connection.provider]}</p>
           <p className="mt-1 truncate text-sm text-foreground">{connection.label}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {connection.trackCount} bài đã lập chỉ mục
+            {formatNumber(connection.trackCount)} bài đã lập chỉ mục
           </p>
         </div>
 

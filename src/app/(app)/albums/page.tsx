@@ -2,6 +2,7 @@ import { AlbumGrid } from "@/components/library/album-grid";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { getAlbums } from "@/lib/library";
+import { formatNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function AlbumsPage() {
       <PageHeader
         eyebrow="Thư viện"
         title="Album"
-        readout={albums.length > 0 ? `${albums.length} album` : undefined}
+        readout={albums.length > 0 ? `${formatNumber(albums.length)} album` : undefined}
       />
       <AlbumGrid
         albums={albums}

@@ -4,6 +4,7 @@ import { TrackList } from "@/components/library/track-list";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { getArtist } from "@/lib/library";
+import { formatNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,8 @@ export default async function ArtistPage({
 
   const { artist, albums, singles } = result;
   const readout = [
-    albums.length > 0 ? `${albums.length} album` : null,
-    singles.length > 0 ? `${singles.length} bài lẻ` : null,
+    albums.length > 0 ? `${formatNumber(albums.length)} album` : null,
+    singles.length > 0 ? `${formatNumber(singles.length)} bài lẻ` : null,
   ]
     .filter(Boolean)
     .join("  ·  ");

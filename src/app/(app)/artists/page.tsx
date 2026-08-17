@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { getArtists } from "@/lib/library";
+import { formatNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function ArtistsPage() {
       <PageHeader
         eyebrow="Thư viện"
         title="Nghệ sĩ"
-        readout={artists.length > 0 ? `${artists.length} nghệ sĩ` : undefined}
+        readout={artists.length > 0 ? `${formatNumber(artists.length)} nghệ sĩ` : undefined}
       />
 
       {artists.length === 0 ? (
@@ -33,7 +34,7 @@ export default async function ArtistsPage() {
                   {artist.name}
                 </span>
                 <span className="tnum shrink-0 text-xs text-subtle">
-                  {artist.trackCount} bài
+                  {formatNumber(artist.trackCount)} bài
                 </span>
               </Link>
             </li>

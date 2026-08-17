@@ -5,15 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** 245 -> "4:05", 3725 -> "1:02:05" */
-export function formatDuration(seconds: number | null | undefined): string {
-  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "--:--";
-  const total = Math.floor(seconds);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+/**
+ * Định dạng số/thời lượng dùng chung với mobile — nguồn ở `@vong/shared/format`.
+ * Trước đây web tự dựng lại inline (số không nhóm nghìn, tổng thời lượng làm tròn về
+ * "X giờ" mất phút, lệch giữa các trang); giờ đọc cùng một bản với các vỏ khác.
+ */
+export {
+  formatDuration,
+  formatLibraryStats,
+  formatLongDuration,
+  formatNumber,
+} from "@vong/shared";
+export type { LibraryStats } from "@vong/shared";
+
+/*
+  DD/MM/YYYY theo giờ VN, dùng chung cho ngày tạo playlist và ngày đồng bộ gu YouTube —
+  trước đây hai chỗ format khác nhau ("17/08/2026" vs "15/8/2026"). Múi giờ ghim để
+  server và client render CÙNG một chuỗi, tránh React báo lệch hydrate.
+*/
+const VN_DATE = new Intl.DateTimeFormat("vi-VN", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "Asia/Ho_Chi_Minh",
+});
+export function formatVnDate(date: Date): string {
+  return VN_DATE.format(date);
 }
 
 /**

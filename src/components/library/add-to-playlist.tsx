@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ListPlus, X } from "lucide-react";
 import type { PlayableTrack } from "@vong/shared";
 import type { PlaylistSummary } from "@vong/shared";
+import { formatNumber } from "@/lib/utils";
 
 /**
  * Hộp chọn playlist để thêm một bài vào.
@@ -143,7 +144,7 @@ export function AddToPlaylist({
                     >
                       <span className="truncate">{playlist.name}</span>
                       <span className="tnum shrink-0 text-xs text-subtle">
-                        {playlist.itemCount}
+                        {formatNumber(playlist.itemCount)}
                       </span>
                     </button>
                   </li>

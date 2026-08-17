@@ -4,7 +4,7 @@ import { Cover } from "@/components/library/cover";
 import { PlayAllButton, TrackList } from "@/components/library/track-list";
 import { requireUserId } from "@/lib/auth";
 import { getAlbum } from "@/lib/library";
-import { formatDuration } from "@/lib/utils";
+import { formatLongDuration, formatNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -55,8 +55,8 @@ export default async function AlbumPage({
           <p className="readout mt-2">
             {[
               album.year ? String(album.year) : null,
-              `${tracks.length} bài`,
-              formatDuration(totalSeconds),
+              `${formatNumber(tracks.length)} bài`,
+              formatLongDuration(totalSeconds),
             ]
               .filter(Boolean)
               .join("  ·  ")}

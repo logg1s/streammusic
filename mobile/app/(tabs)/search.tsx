@@ -122,7 +122,7 @@ export default function SearchScreen() {
           <TextInput
             value={text}
             onChangeText={setText}
-            placeholder="Tên bài, nghệ sĩ hay album"
+            placeholder="Tên bài, nghệ sĩ hoặc album"
             placeholderTextColor={colors.subtle}
             style={styles.input}
             autoCapitalize="none"

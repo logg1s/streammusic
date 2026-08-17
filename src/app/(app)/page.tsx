@@ -10,7 +10,7 @@ import {
   getRecentlyPlayed,
   getRecentTracks,
 } from "@/lib/library";
-import { formatDuration } from "@/lib/utils";
+import { formatLibraryStats } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +23,7 @@ export default async function HomePage() {
     getLibraryStats(userId),
   ]);
 
-  const hours = Math.round(stats.totalSeconds / 3600);
-  const readout = [
-    `${stats.trackCount} bài`,
-    `${stats.albumCount} album`,
-    `${stats.artistCount} nghệ sĩ`,
-    hours > 0 ? `${hours} giờ` : formatDuration(stats.totalSeconds),
-  ].join("  ·  ");
+  const readout = formatLibraryStats(stats);
 
   return (
     <>

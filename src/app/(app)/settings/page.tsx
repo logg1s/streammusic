@@ -13,6 +13,7 @@ import { TelemetryToggle } from "@/components/settings/telemetry-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { requireUserId } from "@/lib/auth";
 import { listConnections } from "@/lib/connections";
+import { formatNumber } from "@/lib/utils";
 import {
   getYoutubeAccount,
   isYoutubeOauthConfigured,
@@ -53,12 +54,12 @@ export default async function SettingsPage() {
         .where(eq(youtubeTasteArtists.userId, userId)),
     ]);
 
-  const storageReadout = `${connections.length} kết nối  ·  ${trackCount?.value ?? 0} bài đã lập chỉ mục`;
+  const storageReadout = `${formatNumber(connections.length)} kết nối  ·  ${formatNumber(trackCount?.value ?? 0)} bài đã lập chỉ mục`;
 
   const youtubeHint = !isYoutubeOauthConfigured()
     ? "Máy chủ chưa cấu hình OAuth YouTube, nên chỉ tìm và phát được bài công khai."
     : ytAccount?.status === "active"
-      ? `${likedCount?.value ?? 0} bài đã thích · ${artistCount?.value ?? 0} nghệ sĩ trong gu`
+      ? `${formatNumber(likedCount?.value ?? 0)} bài đã thích · ${formatNumber(artistCount?.value ?? 0)} nghệ sĩ trong gu`
       : ytAccount?.status === "needs_reauth"
         ? "Cần nối lại tài khoản để tiếp tục đồng bộ gu nhạc."
         : "Chưa nối tài khoản YouTube. Nối để gợi ý ăn theo gu nhạc của bạn.";
