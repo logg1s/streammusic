@@ -67,7 +67,7 @@ export function PlaylistTracks({
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
       <TrackList
         tracks={items.map((item) => item.track)}
-        variant="numbered"
+        variant="positioned"
         emptyMessage="Playlist này chưa có bài nào."
         onRemove={remove}
         onMove={(index, delta) => void move(index, delta)}

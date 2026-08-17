@@ -4,9 +4,19 @@ import { auth, signIn } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
   const session = await auth();
-  if (session?.user) redirect("/");
+  const { callbackUrl } = await searchParams;
+  // Chỉ nhận đường dẫn nội bộ: chặn URL tuyệt đối và "//host" (open redirect).
+  const redirectTo =
+    callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
+      ? callbackUrl
+      : "/";
+  if (session?.user) redirect(redirectTo);
 
   return (
     <main className="grid min-h-dvh place-items-center px-6 py-16">
@@ -33,7 +43,7 @@ export default async function LoginPage() {
           <LoginButton
             signInWithGoogle={async () => {
               "use server";
-              await signIn("google", { redirectTo: "/" });
+              await signIn("google", { redirectTo });
             }}
           />
         </div>

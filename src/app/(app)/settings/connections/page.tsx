@@ -13,6 +13,7 @@ import { ConnectionsManager } from "@/components/settings/connections-manager";
 import { YoutubeLink } from "@/components/settings/youtube-link";
 import { requireUserId } from "@/lib/auth";
 import { listConnections } from "@/lib/connections";
+import { formatNumber, formatVnDate } from "@/lib/utils";
 import { ALL_PROVIDERS } from "@/lib/providers";
 import {
   getYoutubeAccount,
@@ -90,7 +91,7 @@ export default async function ConnectionsPage({
       <PageHeader
         eyebrow="Cài đặt"
         title="Kho lưu trữ"
-        readout={`${views.length} kết nối  ·  ${views.reduce((s, v) => s + v.trackCount, 0)} bài đã lập chỉ mục`}
+        readout={`${formatNumber(views.length)} kết nối  ·  ${formatNumber(views.reduce((s, v) => s + v.trackCount, 0))} bài đã lập chỉ mục`}
       />
 
       {error && (
@@ -124,8 +125,9 @@ export default async function ConnectionsPage({
             ? {
                 channelTitle: ytAccount.channelTitle,
                 status: ytAccount.status,
-                tasteSyncedAt:
-                  ytAccount.tasteSyncedAt?.toLocaleDateString("vi-VN") ?? null,
+                tasteSyncedAt: ytAccount.tasteSyncedAt
+                  ? formatVnDate(ytAccount.tasteSyncedAt)
+                  : null,
               }
             : null
         }

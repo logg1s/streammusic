@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import { requireUserId } from "@/lib/auth";
+import { optionalUserId } from "@/lib/auth";
 import { appOrigin, jsonError, toErrorResponse } from "@/lib/http";
 import { stateCookieName } from "@/lib/oauth-state";
 import {
@@ -12,7 +12,16 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
-    await requireUserId();
+    // Route này mở trong browser hệ thống nên xác thực bằng cookie phiên web. Cookie
+    // hết hạn hay bị xoá thì đẩy qua `/login` như `/api/native/authorize`: một tab
+    // trình duyệt in ra JSON lỗi là ngõ cụt, người dùng không có đường nào đi tiếp.
+    const userId = await optionalUserId();
+    if (!userId) {
+      const login = new URL("/login", appOrigin(request));
+      login.searchParams.set("callbackUrl", "/api/youtube/oauth/authorize");
+      return Response.redirect(login, 302);
+    }
+
     if (!isYoutubeOauthConfigured()) {
       return jsonError(
         "Chưa cấu hình AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET",

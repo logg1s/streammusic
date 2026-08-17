@@ -3,30 +3,20 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, X } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import type { PlaylistSummary } from "@vong/shared";
-
-/*
-  Múi giờ cố định: server và client cùng render danh sách này, để Intl tự đoán
-  múi giờ thì hai bên ra hai chuỗi khác nhau và React báo lệch hydrate.
-*/
-const DATE_FORMAT = new Intl.DateTimeFormat("vi-VN", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  timeZone: "Asia/Ho_Chi_Minh",
-});
+import { formatNumber, formatVnDate } from "@/lib/utils";
 
 export function PlaylistList({ playlists }: { playlists: PlaylistSummary[] }) {
   const router = useRouter();
   const [removing, setRemoving] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   const remove = async (playlist: PlaylistSummary) => {
-    if (!confirm(`Xoá playlist "${playlist.name}"? Không khôi phục lại được.`))
-      return;
     setRemoving(playlist.id);
     await fetch(`/api/playlists/${playlist.id}`, { method: "DELETE" });
     setRemoving(null);
+    setConfirming(null);
     router.refresh();
   };
 
@@ -43,8 +33,8 @@ export function PlaylistList({ playlists }: { playlists: PlaylistSummary[] }) {
             </span>
             <span className="readout mt-0.5 block truncate">
               {[
-                `${playlist.itemCount} bài`,
-                DATE_FORMAT.format(playlist.createdAt),
+                `${formatNumber(playlist.itemCount)} bài`,
+                formatVnDate(playlist.createdAt),
                 playlist.seedLabel ? `Radio · ${playlist.seedLabel}` : null,
               ]
                 .filter(Boolean)
@@ -52,20 +42,44 @@ export function PlaylistList({ playlists }: { playlists: PlaylistSummary[] }) {
             </span>
           </Link>
 
-          <button
-            type="button"
-            aria-label={`Xoá playlist ${playlist.name}`}
-            title="Xoá playlist"
-            disabled={removing === playlist.id}
-            onClick={() => remove(playlist)}
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
-          >
-            {removing === playlist.id ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
+          {confirming === playlist.id ? (
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="px-1 text-xs text-muted-foreground">Xoá?</span>
+              <button
+                type="button"
+                aria-label={`Xác nhận xoá playlist ${playlist.name}`}
+                title="Xoá — không khôi phục lại được"
+                disabled={removing === playlist.id}
+                onClick={() => remove(playlist)}
+                className="grid size-8 place-items-center rounded-md text-danger transition-colors hover:bg-surface disabled:opacity-50"
+              >
+                {removing === playlist.id ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Check className="size-4" />
+                )}
+              </button>
+              <button
+                type="button"
+                aria-label="Huỷ xoá"
+                title="Huỷ"
+                onClick={() => setConfirming(null)}
+                className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Xoá playlist ${playlist.name}`}
+              title="Xoá playlist"
+              onClick={() => setConfirming(playlist.id)}
+              className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+            >
               <X className="size-4" />
-            )}
-          </button>
+            </button>
+          )}
         </li>
       ))}
     </ul>

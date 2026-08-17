@@ -20,8 +20,11 @@ import { usePlayer } from "@/store/player";
 
 interface TrackListProps {
   tracks: PlayableTrack[];
-  /** Trong trang album, số thứ tự có nghĩa; ở nơi khác thì hiện ảnh bìa hữu ích hơn. */
-  variant?: "numbered" | "covered";
+  /**
+   * "numbered" = số thứ tự trong album (theo track_no); "positioned" = đánh số theo vị
+   * trí trong danh sách, dùng cho playlist; "covered" = hiện ảnh bìa, số theo vị trí.
+   */
+  variant?: "numbered" | "covered" | "positioned";
   emptyMessage?: string;
   /** Có mặt thì mỗi dòng thêm nút bỏ bài — dùng ở trang playlist. */
   onRemove?: (track: PlayableTrack, index: number) => void;
