@@ -212,8 +212,13 @@ export function createRadioClient(
     async startRadioFor(seed) {
       // Đổi hàng đợi TRƯỚC khi gọi API: bài gốc phát ngay, không chờ mạng.
       store.usePlayer.getState().startRadio(seed);
+      // Loại CẢ hàng đợi, không chỉ seed. Khi autoplay biến một playlist/album thành
+      // radio, `startRadio` giữ nguyên hàng đợi đang nghe (nhánh keep) — xin lô đầu mà
+      // chỉ loại seed thì server trả về chính những bài vừa nghe: lô đầu vừa thiếu bài
+      // (client lọc trùng bỏ đi) vừa lặp lại bài vừa bỏ qua. Đối xứng với `refillRadio`.
+      const exclude = store.usePlayer.getState().queue.map((t) => t.id);
       try {
-        const tracks = await fetchBatch(seed.id, [seed.id], FIRST_BATCH);
+        const tracks = await fetchBatch(seed.id, exclude, FIRST_BATCH);
         store.usePlayer.getState().appendTracks(tracks);
         store.usePlayer.getState().setRadioStatus("idle", tracks.length === 0);
       } catch (error) {

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { autoplaySeed } from "./radio-client";
-import type { PlayerState } from "./player-store";
-import type { PlayableTrack } from "./types";
+import type { PersistStorage } from "zustand/middleware";
+import { autoplaySeed, createRadioClient } from "./radio-client";
+import {
+  createPlayerStore,
+  type PersistedPlayerState,
+  type PlayerState,
+} from "./player-store";
+import type { FetchLike, PlayableTrack } from "./types";
 
 function track(id: string): PlayableTrack {
   return {
@@ -85,5 +90,59 @@ describe("autoplaySeed", () => {
     // order xáo: phát b (index 1) ở cuối
     const seed = autoplaySeed(state({ queue: q, order: [0, 2, 1], position: 2 }));
     expect(seed?.id).toBe("b");
+  });
+});
+
+function memoryStorage(): PersistStorage<PersistedPlayerState> {
+  const map = new Map<string, string>();
+  return {
+    getItem: (name) => {
+      const raw = map.get(name);
+      return raw ? JSON.parse(raw) : null;
+    },
+    setItem: (name, value) => {
+      map.set(name, JSON.stringify(value));
+    },
+    removeItem: (name) => {
+      map.delete(name);
+    },
+  };
+}
+
+describe("startRadioFor", () => {
+  it("loại CẢ hàng đợi khỏi lô đầu, không chỉ seed", async () => {
+    // Autoplay biến playlist thành radio: hàng đợi vẫn còn nguyên các bài vừa nghe.
+    // Lô đầu phải loại TẤT CẢ chúng, nếu không server trả lại chính playlist đó — lô
+    // đầu vừa thiếu bài (client lọc trùng bỏ đi) vừa lặp lại bài vừa bỏ qua.
+    const store = createPlayerStore({ storage: memoryStorage(), name: "t" });
+    const playlist = ["a", "b", "c", "d"].map(track);
+    // position ở bài cuối → seed = bài đang phát → startRadio giữ nguyên hàng đợi.
+    store.usePlayer.getState().playQueue(playlist, playlist.length - 1);
+
+    let sentExclude: string[] = [];
+    const fetchImpl: FetchLike = async (_url, init) => {
+      sentExclude = JSON.parse(init?.body ?? "{}").exclude ?? [];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ tracks: [track("x"), track("y")] }),
+        text: async () => "",
+      };
+    };
+    const client = createRadioClient(store, { fetchImpl });
+
+    const seed = store.usePlayer.getState().queue[playlist.length - 1];
+    await client.startRadioFor(seed);
+
+    expect([...sentExclude].sort()).toEqual(["a", "b", "c", "d"]);
+    // Không bài nào của playlist bị nối lại; server sạch nên chỉ có x, y ở cuối.
+    expect(store.usePlayer.getState().queue.map((t) => t.id)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+      "x",
+      "y",
+    ]);
   });
 });
