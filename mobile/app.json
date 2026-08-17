@@ -2,14 +2,14 @@
   "expo": {
     "name": "Vọng",
     "slug": "vong",
-    "version": "0.3.1",
+    "version": "0.4.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "scheme": "vong",
     "android": {
       "package": "app.vong.mobile",
-      "versionCode": 4
+      "versionCode": 5
     },
     "ios": {
       "bundleIdentifier": "app.vong.mobile",
