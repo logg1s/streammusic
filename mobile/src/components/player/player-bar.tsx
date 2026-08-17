@@ -32,58 +32,69 @@ export function PlayerBar() {
   const track = useCurrentTrack();
   const isPlaying = usePlayer((s) => s.isPlaying);
   const isBuffering = usePlayer((s) => s.isBuffering);
+  const error = usePlayer((s) => s.error);
 
   // Hàng đợi rỗng thì không có gì để điều khiển.
   if (!track) return null;
 
   return (
-    <Pressable
-      style={styles.bar}
-      accessibilityRole="button"
-      accessibilityLabel={`Mở màn hình phát: ${track.title}`}
-      onPress={() => router.push("/player")}
-    >
-      <MiniProgress />
+    <View>
+      {/* Lỗi phát nằm trong màn hình phát toàn cảnh, mà thanh này lại là chỗ duy nhất
+          người dùng thấy khi đang duyệt thư viện — im lặng thì tiếng tắt mà không rõ vì sao. */}
+      {error ? (
+        <Text style={styles.error} numberOfLines={2}>
+          {error}
+        </Text>
+      ) : null}
 
-      <View style={styles.row}>
-        <Artwork url={track.coverUrl} name={track.title} size={44} />
+      <Pressable
+        style={styles.bar}
+        accessibilityRole="button"
+        accessibilityLabel={`Mở màn hình phát: ${track.title}`}
+        onPress={() => router.push("/player")}
+      >
+        <MiniProgress />
 
-        <View style={styles.meta}>
-          <Text style={styles.title} numberOfLines={1}>
-            {track.title}
-          </Text>
-          <Text style={styles.artist} numberOfLines={1}>
-            {isBuffering
-              ? "Đang tải…"
-              : (track.artistName ?? "Không rõ nghệ sĩ")}
-          </Text>
+        <View style={styles.row}>
+          <Artwork url={track.coverUrl} name={track.title} size={44} />
+
+          <View style={styles.meta}>
+            <Text style={styles.title} numberOfLines={1}>
+              {track.title}
+            </Text>
+            <Text style={styles.artist} numberOfLines={1}>
+              {isBuffering
+                ? "Đang tải…"
+                : (track.artistName ?? "Không rõ nghệ sĩ")}
+            </Text>
+          </View>
+
+          <Pressable
+            style={styles.playButton}
+            accessibilityRole="button"
+            accessibilityLabel={isPlaying ? "Tạm dừng" : "Phát"}
+            onPress={() => usePlayer.getState().toggle()}
+          >
+            <Ionicons
+              name={isPlaying ? "pause" : "play"}
+              size={20}
+              color={onAccent}
+              // Tam giác play của Ionicons lệch quang học sang trái một chút.
+              style={isPlaying ? undefined : styles.playNudge}
+            />
+          </Pressable>
+
+          <Pressable
+            style={styles.button}
+            accessibilityRole="button"
+            accessibilityLabel="Bài sau"
+            onPress={() => usePlayer.getState().next()}
+          >
+            <Ionicons name="play-skip-forward" size={20} color={colors.text} />
+          </Pressable>
         </View>
-
-        <Pressable
-          style={styles.playButton}
-          accessibilityRole="button"
-          accessibilityLabel={isPlaying ? "Tạm dừng" : "Phát"}
-          onPress={() => usePlayer.getState().toggle()}
-        >
-          <Ionicons
-            name={isPlaying ? "pause" : "play"}
-            size={20}
-            color={onAccent}
-            // Tam giác play của Ionicons lệch quang học sang trái một chút.
-            style={isPlaying ? undefined : styles.playNudge}
-          />
-        </Pressable>
-
-        <Pressable
-          style={styles.button}
-          accessibilityRole="button"
-          accessibilityLabel="Bài sau"
-          onPress={() => usePlayer.getState().next()}
-        >
-          <Ionicons name="play-skip-forward" size={20} color={colors.text} />
-        </Pressable>
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
 }
 
@@ -93,6 +104,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
+  },
+  error: {
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    color: colors.danger,
+    fontSize: font.xs,
+    textAlign: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
   progressTrack: {
     height: 2,

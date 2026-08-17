@@ -68,8 +68,12 @@ export function useApi<T>(path: string | null): ApiResult<T> {
   // giữ không thuộc lượt gọi hiện tại là biết đang chờ. Set trong thân effect thì mỗi lần
   // đổi path là hai lượt render liên tiếp, và màn hình nháy dữ liệu cũ trước khi trắng.
   if (path === null) return { data: null, error: null, loading: false, reload };
-  if (done === null || done.path !== path || done.attempt !== attempt) {
-    return { data: null, error: null, loading: true, reload };
-  }
-  return { data: done.data, error: done.error, loading: false, reload };
+  const settled =
+    done !== null && done.path === path && done.attempt === attempt;
+  if (settled) return { data: done.data, error: done.error, loading: false, reload };
+  // Đang chờ lượt gọi hiện tại. Nếu là lượt RELOAD cùng path thì giữ dữ liệu cũ để danh
+  // sách không nháy trắng (màn hình quay lại focus gọi lại mà vẫn thấy nội dung cũ); chỉ
+  // trả null khi ĐỔI path vì dữ liệu cũ khi ấy thuộc màn hình khác.
+  const stale = done !== null && done.path === path ? done.data : null;
+  return { data: stale, error: null, loading: true, reload };
 }

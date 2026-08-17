@@ -12,7 +12,7 @@ import {
   usePlayer,
 } from "@/store/player";
 import { forceRefreshSessionToken } from "@/lib/api";
-import { radioEngine } from "@/lib/radio-engine";
+import { radioEngine, reportBlocked } from "@/lib/radio-engine";
 import { toNativeItem } from "@/lib/resolve";
 import {
   VongAudio,
@@ -207,6 +207,19 @@ export function PlaybackEngine() {
         // Vẫn ghi lỗi kể cả khi nhảy bài: không còn bài nào để nhảy thì đây là thứ duy
         // nhất người dùng thấy được.
         after.setError(messageOf(error));
+
+        // Video hỏng thật (bị gỡ, chặn nhúng, chặn theo vùng) — báo về để lô sau không
+        // gặp lại. Chỉ báo cho ĐÚNG lớp lỗi này: `LoginRequiredError` và lỗi mạng là
+        // chuyện của phía mình, báo lên thành "video hỏng" là loại oan bài tốt khỏi mọi
+        // lô gợi ý sau này. Trước đây vỏ Android không báo gì cả, nên tín hiệu này chỉ
+        // bao giờ về server từ trình duyệt.
+        if (
+          error instanceof VideoUnplayableError &&
+          current.source === "youtube" &&
+          current.youtubeVideoId
+        ) {
+          reportBlocked(current.youtubeVideoId, current.artistName);
+        }
         if (
           failuresRef.current < MAX_CONSECUTIVE_FAILURES &&
           peekNextTrack()

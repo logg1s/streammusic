@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
+import { useRouter } from "expo-router";
 import { getAnalytics } from "@/lib/analytics";
 import { ErrorNote, Loading, Screen } from "@/components/screen";
 import { SectionHeader } from "@/components/section-header";
@@ -8,24 +17,31 @@ import {
   PROVIDER_LABEL,
   formatNumber,
 } from "@/lib/format";
-import { signOut } from "@/lib/api";
-import type { ConnectionsSummary } from "@/lib/dto";
-import { useApi } from "@/lib/use-api";
+import { apiFetch, apiJson, signOut } from "@/lib/api";
+import type { ConnectionsSummary, YoutubeSyncResult } from "@/lib/dto";
+import { openOAuthFlow } from "@/lib/oauth";
+import { errorMessage, useApi } from "@/lib/use-api";
 import { usePlayer } from "@/store/player";
-import { colors, font, radius, spacing } from "@/theme";
+import { colors, font, onAccent, radius, spacing } from "@/theme";
 
 /**
- * Cài đặt: xem kho lưu trữ đã nối, trạng thái tài khoản YouTube, và đăng xuất.
+ * Cài đặt: kho lưu trữ đã nối, tài khoản YouTube, hai công tắc, và đăng xuất.
  *
- * Chỉ đọc. Nối thêm kho hay nối YouTube là luồng OAuth nhiều bước, làm trên web rồi
- * app thấy ngay — nhân bản luồng đó vào đây chỉ để bấm một lần là không đáng.
+ * Việc nặng của kho lưu trữ (chọn thư mục, quét) ở màn `settings/connections`; ở đây
+ * chỉ giữ phần đọc nhanh và lối rẽ sang đó.
  */
 export default function SettingsScreen() {
+  const router = useRouter();
   const { data, error, loading, reload } = useApi<ConnectionsSummary>(
     "/api/connections",
   );
   const autoplay = usePlayer((s) => s.autoplay);
   const setAutoplay = usePlayer((s) => s.setAutoplay);
+
+  const [ytBusy, setYtBusy] = useState(false);
+  const [ytError, setYtError] = useState<string | null>(null);
+  /** Kết quả lượt đồng bộ vừa chạy — số của `/api/connections` chỉ mới sau khi reload. */
+  const [ytSynced, setYtSynced] = useState<YoutubeSyncResult | null>(null);
 
   // `null` cho tới khi đọc xong AsyncStorage — hiện sẵn "bật" rồi lật sang "tắt" ngay
   // trước mắt người đã tắt nó là kiểu nhấp nháy khiến người dùng mất tin.
@@ -43,6 +59,53 @@ export default function SettingsScreen() {
     // Chỉ ghi nhận lúc bật lại; gửi một sự kiện ngay sau khi người dùng vừa tắt thu
     // thập là làm đúng thứ họ vừa từ chối.
     if (value) analytics.track("setting_change", { key: "telemetry", value: "on" });
+  };
+
+  const syncYoutube = async () => {
+    setYtBusy(true);
+    setYtError(null);
+    try {
+      const result = await apiJson<YoutubeSyncResult>("/api/youtube/sync", {
+        method: "POST",
+      });
+      setYtSynced(result);
+      reload();
+    } catch (cause) {
+      setYtError(errorMessage(cause));
+    } finally {
+      setYtBusy(false);
+    }
+  };
+
+  const unlinkYoutube = () => {
+    Alert.alert(
+      "Bỏ liên kết YouTube?",
+      "Gu nhạc đã đồng bộ sẽ bị xoá. Radio vẫn chạy, chỉ là chưa cá nhân hoá.",
+      [
+        { text: "Huỷ", style: "cancel" },
+        {
+          text: "Bỏ liên kết",
+          style: "destructive",
+          onPress: () => {
+            setYtBusy(true);
+            setYtError(null);
+            // `apiFetch` chứ không `apiJson`: route trả 204 không thân, đọc JSON là ném.
+            void apiFetch("/api/youtube/link", { method: "DELETE" })
+              .then(() => {
+                setYtSynced(null);
+                reload();
+              })
+              .catch((cause: unknown) => setYtError(errorMessage(cause)))
+              .finally(() => setYtBusy(false));
+          },
+        },
+      ],
+    );
+  };
+
+  const linkYoutube = () => {
+    setYtError(null);
+    void openOAuthFlow("/api/youtube/oauth/authorize").then(reload);
   };
 
   return (
@@ -93,11 +156,14 @@ export default function SettingsScreen() {
       {data !== null ? (
         <>
           <View style={styles.section}>
-            <SectionHeader label="Kho lưu trữ" />
+            <SectionHeader
+              label="Kho lưu trữ"
+              actionLabel="Quản lý"
+              onAction={() => router.push("/settings/connections")}
+            />
             {data.connections.length === 0 ? (
               <Text style={styles.note}>
-                Chưa nối kho nào. Mở Vọng trên máy tính, vào Cài đặt · Kết nối để
-                nối
+                Chưa nối kho nào. Bấm Quản lý để nối
                 {data.available.length > 0
                   ? ` ${data.available.map((p) => p.displayName).join(", ")}`
                   : " một kho lưu trữ"}
@@ -154,16 +220,92 @@ export default function SettingsScreen() {
                 </Text>
                 {data.youtube.needsReauth ? (
                   <Text style={[styles.rowMeta, styles.warn]}>
-                    Cần nối lại tài khoản để tiếp tục đồng bộ gu nhạc.
+                    Liên kết đã hết quyền truy cập. Google thu hồi refresh token
+                    sau 7 ngày khi app còn ở chế độ Testing — đây là hành vi bình
+                    thường, không phải lỗi.
                   </Text>
                 ) : null}
+                {ytSynced !== null ? (
+                  <Text style={styles.rowMeta}>
+                    Vừa đồng bộ: {formatNumber(ytSynced.liked)} bài đã thích ·{" "}
+                    {formatNumber(ytSynced.subscriptions)} kênh đăng ký ·{" "}
+                    {formatNumber(ytSynced.artists)} nghệ sĩ vào gu.
+                  </Text>
+                ) : null}
+
+                <View style={styles.actions}>
+                  {data.youtube.needsReauth ? (
+                    <Pressable
+                      onPress={linkYoutube}
+                      style={({ pressed }) => [
+                        styles.primary,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={styles.primaryLabel}>Cấp quyền lại</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={() => void syncYoutube()}
+                      disabled={ytBusy}
+                      style={({ pressed }) => [
+                        styles.chip,
+                        ytBusy && styles.disabled,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      {ytBusy ? (
+                        <ActivityIndicator
+                          color={colors.accentText}
+                          size="small"
+                        />
+                      ) : null}
+                      <Text style={styles.chipLabel}>
+                        {ytBusy ? "Đang đồng bộ" : "Đồng bộ lại gu nhạc"}
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  <Pressable
+                    onPress={unlinkYoutube}
+                    disabled={ytBusy}
+                    style={({ pressed }) => [
+                      styles.ghost,
+                      ytBusy && styles.disabled,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.rowMeta, styles.warn]}>
+                      Bỏ liên kết
+                    </Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
-              <Text style={styles.note}>
-                Chưa nối tài khoản YouTube. Nối trên web để gợi ý ăn theo gu nhạc
-                của bạn.
-              </Text>
+              <>
+                <Text style={styles.note}>
+                  Nối tài khoản YouTube để radio bám theo gu nhạc của bạn — video
+                  đã thích và kênh đã đăng ký.
+                </Text>
+                <View style={styles.actions}>
+                  <Pressable
+                    onPress={linkYoutube}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.chipLabel}>+ Nối YouTube</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.rowMeta}>
+                  Cấp quyền xong thì đóng tab trình duyệt để quay lại đây.
+                </Text>
+              </>
             )}
+            {ytError !== null ? (
+              <Text style={[styles.rowMeta, styles.warn]}>{ytError}</Text>
+            ) : null}
           </View>
         </>
       ) : null}
@@ -213,6 +355,48 @@ const styles = StyleSheet.create({
   },
   warn: {
     color: colors.danger,
+  },
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  chipLabel: {
+    color: colors.text,
+    fontSize: font.sm,
+  },
+  primary: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  primaryLabel: {
+    color: onAccent,
+    fontSize: font.sm,
+    fontWeight: "600",
+  },
+  ghost: {
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  disabled: {
+    opacity: 0.5,
   },
   signOut: {
     borderWidth: StyleSheet.hairlineWidth,

@@ -12,6 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Scrubber } from "@/components/player/scrubber";
+import { PROVIDER_LABEL } from "@/lib/format";
 import { colors, font, onAccent, radius, spacing } from "@/theme";
 import { useCurrentTrack, usePlayer } from "@/store/player";
 
@@ -33,6 +34,23 @@ function formatTime(seconds: number): string {
   return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
 }
 
+/**
+ * music-metadata trả tên codec dài dòng ("MPEG 1 Layer 3", "MPEG-4/AAC"). Dải thông số
+ * chỉ có một dòng dưới tên nghệ sĩ nên rút về tên người ta hay gọi — giống bên web.
+ */
+function shortCodec(codec: string | null): string | null {
+  if (!codec) return null;
+  const c = codec.toLowerCase();
+  if (c.includes("layer 3") || c.includes("mp3")) return "MP3";
+  if (c.includes("aac")) return "AAC";
+  if (c.includes("flac")) return "FLAC";
+  if (c.includes("opus")) return "OPUS";
+  if (c.includes("vorbis")) return "VORBIS";
+  if (c.includes("alac")) return "ALAC";
+  if (c.includes("pcm") || c.includes("wav")) return "WAV";
+  return codec.toUpperCase().slice(0, 8);
+}
+
 export default function PlayerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -43,6 +61,7 @@ export default function PlayerScreen() {
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
   const error = usePlayer((s) => s.error);
+  const radio = usePlayer((s) => s.radio);
   const queue = usePlayer((s) => s.queue);
   const order = usePlayer((s) => s.order);
   const position = usePlayer((s) => s.position);
@@ -62,6 +81,25 @@ export default function PlayerScreen() {
       </View>
     );
   }
+
+  const artistId = track.artistId;
+
+  const sourceParts = [
+    track.provider ? PROVIDER_LABEL[track.provider] : null,
+    shortCodec(track.codec),
+    track.bitrate ? `${Math.round(track.bitrate / 1000)} kbps` : null,
+  ].filter((part): part is string => part !== null);
+
+  const radioStatus =
+    radio === null
+      ? null
+      : radio.status === "loading"
+        ? "Đang tìm bài tương tự…"
+        : radio.status === "error"
+          ? (radio.message ?? "Không lấy được gợi ý")
+          : radio.exhausted
+            ? "Hết bài gợi ý"
+            : null;
 
   const header = (
     <View style={styles.header}>
@@ -111,9 +149,28 @@ export default function PlayerScreen() {
       <Text style={styles.title} numberOfLines={2}>
         {track.title}
       </Text>
-      <Text style={styles.artist} numberOfLines={1}>
-        {track.artistName ?? "Không rõ nghệ sĩ"}
-      </Text>
+      {artistId !== null ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Xem nghệ sĩ ${track.artistName ?? ""}`}
+          onPress={() =>
+            router.push({ pathname: "/artists/[id]", params: { id: artistId } })
+          }
+        >
+          <Text style={[styles.artist, styles.artistLink]} numberOfLines={1}>
+            {track.artistName ?? "Không rõ nghệ sĩ"}
+          </Text>
+        </Pressable>
+      ) : (
+        <Text style={styles.artist} numberOfLines={1}>
+          {track.artistName ?? "Không rõ nghệ sĩ"}
+        </Text>
+      )}
+      {sourceParts.length > 0 ? (
+        <Text style={styles.source} numberOfLines={1}>
+          {sourceParts.join(" · ")}
+        </Text>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Scrubber />
@@ -194,6 +251,35 @@ export default function PlayerScreen() {
         </Pressable>
       </View>
 
+      {radio ? (
+        <View style={styles.radioCard}>
+          <View style={styles.radioMeta}>
+            <Text style={styles.radioSeed} numberOfLines={1}>
+              Radio · {radio.seedLabel}
+            </Text>
+            {radioStatus ? (
+              <Text
+                style={[
+                  styles.radioStatus,
+                  radio.status === "error" && styles.radioStatusError,
+                ]}
+                numberOfLines={2}
+              >
+                {radioStatus}
+              </Text>
+            ) : null}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dừng radio"
+            onPress={() => usePlayer.getState().stopRadio()}
+            style={styles.radioStop}
+          >
+            <Text style={styles.radioStopText}>Dừng radio</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <Text style={styles.queueHeading}>
         Hàng đợi · {order.length} bài
       </Text>
@@ -217,35 +303,58 @@ export default function PlayerScreen() {
         if (!row) return null;
         const active = orderPos === position;
         return (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => usePlayer.getState().playTrackAt(orderPos)}
-            style={[styles.queueRow, active && styles.queueRowActive]}
-          >
-            {active ? (
-              <View style={styles.queueIndex}>
-                <Ionicons name="volume-high" size={15} color={colors.accent} />
+          <View style={[styles.queueRow, active && styles.queueRowActive]}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => usePlayer.getState().playTrackAt(orderPos)}
+              style={styles.queueMain}
+            >
+              {active ? (
+                <View style={styles.queueIndex}>
+                  <Ionicons name="volume-high" size={15} color={colors.accent} />
+                </View>
+              ) : (
+                <Text style={styles.queueIndexText}>
+                  {String(orderPos + 1)}
+                </Text>
+              )}
+              <View style={styles.queueMeta}>
+                <Text
+                  style={[styles.queueTitle, active && styles.activeGlyph]}
+                  numberOfLines={1}
+                >
+                  {row.title}
+                </Text>
+                <Text style={styles.queueArtist} numberOfLines={1}>
+                  {row.artistName ?? "Không rõ nghệ sĩ"}
+                </Text>
               </View>
-            ) : (
-              <Text style={styles.queueIndexText}>
-                {String(orderPos + 1)}
+              <Text style={styles.queueTime}>
+                {row.durationSec === null ? "" : formatTime(row.durationSec)}
               </Text>
-            )}
-            <View style={styles.queueMeta}>
-              <Text
-                style={[styles.queueTitle, active && styles.activeGlyph]}
-                numberOfLines={1}
+            </Pressable>
+
+            {/* Chỉ bài còn ở phía sau mới đẩy lên được — `moveToNext` bỏ qua bài đã qua. */}
+            {orderPos > position ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Phát tiếp: ${row.title}`}
+                onPress={() => usePlayer.getState().moveToNext(orderPos)}
+                style={styles.queueAction}
               >
-                {row.title}
-              </Text>
-              <Text style={styles.queueArtist} numberOfLines={1}>
-                {row.artistName ?? "Không rõ nghệ sĩ"}
-              </Text>
-            </View>
-            <Text style={styles.queueTime}>
-              {row.durationSec === null ? "" : formatTime(row.durationSec)}
-            </Text>
-          </Pressable>
+                <Ionicons name="arrow-up" size={18} color={colors.muted} />
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Bỏ khỏi hàng đợi: ${row.title}`}
+              onPress={() => usePlayer.getState().removeAt(orderPos)}
+              style={styles.queueAction}
+            >
+              <Ionicons name="close" size={18} color={colors.muted} />
+            </Pressable>
+          </View>
         );
       }}
     />
@@ -318,10 +427,53 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: spacing.xs,
   },
+  artistLink: {
+    color: colors.accentText,
+  },
+  source: {
+    color: colors.subtle,
+    fontSize: font.xs,
+    marginTop: spacing.xs,
+  },
   error: {
     color: colors.danger,
     fontSize: font.sm,
     marginTop: spacing.sm,
+  },
+  radioCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingLeft: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  radioMeta: {
+    flex: 1,
+  },
+  radioSeed: {
+    color: colors.accentText,
+    fontSize: font.sm,
+    fontWeight: "600",
+  },
+  radioStatus: {
+    color: colors.muted,
+    fontSize: font.xs,
+    marginTop: 2,
+  },
+  radioStatusError: {
+    color: colors.danger,
+  },
+  radioStop: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+  },
+  radioStopText: {
+    color: colors.muted,
+    fontSize: font.sm,
   },
   controls: {
     flexDirection: "row",
@@ -391,12 +543,25 @@ const styles = StyleSheet.create({
   queueRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
+    paddingLeft: spacing.xl,
+    paddingRight: spacing.sm,
   },
   queueRowActive: {
     backgroundColor: colors.accentSoft,
+  },
+  queueMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  /** Vuông 44pt: nút phụ trong danh sách vẫn phải đủ rộng cho ngón cái. */
+  queueAction: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   queueIndex: {
     width: 24,

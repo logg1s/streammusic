@@ -1,6 +1,7 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { PlayableTrack } from "@vong/shared";
+import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet";
 import { Artwork } from "@/components/artwork";
 import { formatDuration, trackSubtitle } from "@/lib/format";
 import { startRadioFor } from "@/lib/radio-engine";
@@ -19,6 +20,9 @@ export const TRACK_ROW_HEIGHT = 60;
  *
  * `radioOnTap` cho danh sách "bài lẻ" (nghe gần đây, kết quả tìm, gợi ý): bấm là seed
  * radio từ đúng bài đó thay vì phát cả danh sách. Ở album/playlist thì để tắt.
+ *
+ * Nhấn giữ mở hộp thêm vào playlist. Không có nút riêng: dòng bài chỉ cao 60px và đã
+ * mang bìa, tiêu đề, huy hiệu YT và thời lượng — thêm một nút nữa là chật.
  */
 export const TrackRow = memo(function TrackRow({
   track,
@@ -34,40 +38,54 @@ export const TrackRow = memo(function TrackRow({
   radioOnTap?: boolean;
 }) {
   const isCurrent = useIsCurrentTrack(track.id);
+  const [adding, setAdding] = useState(false);
 
   return (
-    <Pressable
-      onPress={() => {
-        if (radioOnTap) void startRadioFor(track);
-        else usePlayer.getState().playQueue(tracks, index);
-      }}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-    >
-      {showArtwork ? (
-        <Artwork url={track.coverUrl} name={track.title} size={44} rounded="sm" />
-      ) : (
-        <Text style={[styles.ordinal, isCurrent && styles.currentText]}>
-          {track.trackNo ?? index + 1}
-        </Text>
-      )}
+    <>
+      <Pressable
+        onPress={() => {
+          if (radioOnTap) void startRadioFor(track);
+          else usePlayer.getState().playQueue(tracks, index);
+        }}
+        onLongPress={() => setAdding(true)}
+        accessibilityHint="Nhấn giữ để thêm vào playlist"
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      >
+        {showArtwork ? (
+          <Artwork
+            url={track.coverUrl}
+            name={track.title}
+            size={44}
+            rounded="sm"
+          />
+        ) : (
+          <Text style={[styles.ordinal, isCurrent && styles.currentText]}>
+            {track.trackNo ?? index + 1}
+          </Text>
+        )}
 
-      <View style={styles.body}>
-        <Text
-          numberOfLines={1}
-          style={[styles.title, isCurrent && styles.currentText]}
-        >
-          {track.title}
-        </Text>
-        <Text numberOfLines={1} style={styles.subtitle}>
-          {trackSubtitle(track)}
-        </Text>
-      </View>
+        <View style={styles.body}>
+          <Text
+            numberOfLines={1}
+            style={[styles.title, isCurrent && styles.currentText]}
+          >
+            {track.title}
+          </Text>
+          <Text numberOfLines={1} style={styles.subtitle}>
+            {trackSubtitle(track)}
+          </Text>
+        </View>
 
-      {track.source === "youtube" ? (
-        <Text style={styles.badge}>YT</Text>
+        {track.source === "youtube" ? (
+          <Text style={styles.badge}>YT</Text>
+        ) : null}
+        <Text style={styles.duration}>{formatDuration(track.durationSec)}</Text>
+      </Pressable>
+
+      {adding ? (
+        <AddToPlaylistSheet track={track} onClose={() => setAdding(false)} />
       ) : null}
-      <Text style={styles.duration}>{formatDuration(track.durationSec)}</Text>
-    </Pressable>
+    </>
   );
 });
 

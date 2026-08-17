@@ -93,6 +93,42 @@ export interface PlaylistDetail {
   items: { itemId: string; track: PlayableTrack }[];
 }
 
+/** `POST /api/youtube/sync` — số đếm của một lượt đồng bộ gu nhạc. */
+export interface YoutubeSyncResult {
+  liked: number;
+  subscriptions: number;
+  artists: number;
+}
+
+/** `GET /api/connections/<id>/browse` — route đã lọc sẵn, `entries` chỉ còn thư mục. */
+export interface BrowseResult {
+  folderId: string | null;
+  rootFolderId: string;
+  entries: { id: string; name: string; path: string }[];
+}
+
+/** `POST /api/scan` — job đã xếp hàng, chưa xử lý file nào. */
+export interface ScanStart {
+  jobId: string;
+  totalFiles: number;
+}
+
+/**
+ * `POST /api/scan/<id>/step` — một lô đã xử lý.
+ *
+ * `job` là tuỳ chọn vì route trả thẳng kết quả `processBatch` khi job đã bị huỷ hay
+ * hỏng; nơi gọi phải coi việc thiếu nó là "không đo được tiến độ", không phải số 0.
+ */
+export interface ScanStep {
+  done: boolean;
+  job?: {
+    totalFiles: number;
+    processedFiles: number;
+    skippedFiles: number;
+    failedFiles: number;
+  };
+}
+
 export interface ConnectionsSummary {
   connections: {
     id: string;

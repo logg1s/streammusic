@@ -544,7 +544,17 @@ export function createPlayerStore(
           state.pendingSeek = state.currentTime > 1 ? state.currentTime : null;
           // Lô đang tải dở lúc đóng trang không còn nữa; để "loading" thì RadioController
           // tưởng có request đang chạy và không bao giờ nạp thêm.
-          if (state.radio) state.radio = { ...state.radio, status: "idle" };
+          //
+          // `errorKind` được thêm sau nên bản ghi cũ trên đĩa không có nó — điền `null`
+          // ở đây thay vì bump `version` của persist, vì bump là vứt luôn hàng đợi mà
+          // người dùng đang nghe dở, một cái giá quá đắt cho một trường mới.
+          if (state.radio) {
+            state.radio = {
+              ...state.radio,
+              status: "idle",
+              errorKind: state.radio.errorKind ?? null,
+            };
+          }
         },
         storage: options.storage,
         name: options.name ?? "vong-player",

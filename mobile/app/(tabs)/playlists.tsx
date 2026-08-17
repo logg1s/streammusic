@@ -1,5 +1,7 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import {
   EmptyNote,
   ErrorNote,
@@ -8,22 +10,48 @@ import {
   Screen,
   useContentInsets,
 } from "@/components/screen";
+import { TextPrompt } from "@/components/text-prompt";
 import { formatNumber } from "@/lib/format";
 import type { PlaylistList, PlaylistRow } from "@/lib/dto";
+import { createPlaylist } from "@/lib/playlist-actions";
 import { useApi } from "@/lib/use-api";
-import { colors, font, spacing } from "@/theme";
+import { usePlayer } from "@/store/player";
+import { colors, font, onAccent, radius, spacing } from "@/theme";
 
 /**
  * Playlist đã lưu.
  *
- * Không có nút tạo mới ở đây, và cũng chưa có ở bất kỳ đâu trong app Android: `POST
- * /api/playlists` đòi cả danh sách bài kèm theo (nó lưu hàng đợi đang phát), mà vỏ này
- * hiện chỉ đọc — `src/lib/api.ts` không gửi request ghi nào ngoài lúc đăng nhập. Vì vậy
- * trạng thái rỗng chỉ đường sang web/máy tính chứ không chỉ sang màn hình phát.
+ * Tạo mới ở đây là LƯU HÀNG ĐỢI ĐANG PHÁT, không phải dựng một playlist trắng: `POST
+ * /api/playlists` đòi kèm danh sách bài và từ chối tập rỗng. Vì vậy nút chỉ hiện khi
+ * hàng đợi có bài; muốn thêm từng bài thì nhấn giữ một dòng bài bất kỳ.
  */
 export default function PlaylistsScreen() {
   const { data, error, loading, reload } = useApi<PlaylistList>("/api/playlists");
   const content = useContentInsets();
+  const [naming, setNaming] = useState(false);
+  const queueLength = usePlayer((state) => state.queue.length);
+  const seedLabel = usePlayer((state) => state.radio?.seedLabel ?? null);
+
+  // Playlist được tạo ở màn khác (nhấn giữ một dòng bài → thêm vào playlist), nên tab này
+  // phải tải lại mỗi lần quay lại focus — nếu không playlist mới không hiện cho tới khi mở
+  // lại app. Bỏ qua lần focus đầu vì effect gắn kết đã tự gọi một lượt lúc mount.
+  const mounted = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (mounted.current) reload();
+      else mounted.current = true;
+    }, [reload]),
+  );
+
+  const save = async (name: string) => {
+    // Lấy theo `order` chứ không phải `queue`: đó mới là thứ tự người nghe đang nghe.
+    const { queue, order } = usePlayer.getState();
+    const ids = order
+      .map((position) => queue[position]?.id)
+      .filter((id): id is string => typeof id === "string");
+    await createPlaylist(name, ids, seedLabel);
+    reload();
+  };
 
   if (loading && data === null) {
     return (
@@ -43,6 +71,18 @@ export default function PlaylistsScreen() {
 
   if (data === null) return null;
 
+  const saveButton =
+    queueLength > 0 ? (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setNaming(true)}
+        style={({ pressed }) => [styles.save, pressed && styles.savePressed]}
+      >
+        <Ionicons name="add" size={16} color={onAccent} />
+        <Text style={styles.saveLabel}>Lưu hàng đợi thành playlist</Text>
+      </Pressable>
+    ) : null;
+
   return (
     <Screen>
       <FlatList
@@ -52,18 +92,38 @@ export default function PlaylistsScreen() {
         contentContainerStyle={content}
         ListHeaderComponent={
           data.playlists.length > 0 ? (
-            <Readout
-              text={`${formatNumber(data.playlists.length)} playlist`}
-            />
+            <View style={styles.header}>
+              <Readout
+                text={`${formatNumber(data.playlists.length)} playlist`}
+              />
+              <View style={styles.headerAction}>{saveButton}</View>
+            </View>
           ) : null
         }
         ListEmptyComponent={
           <EmptyNote
             title="Chưa có playlist nào"
-            hint="Lưu hàng đợi thành playlist trên bản web hoặc máy tính."
+            hint={
+              queueLength > 0
+                ? "Lưu hàng đợi đang phát thành playlist đầu tiên."
+                : "Phát vài bài rồi lưu hàng đợi, hoặc nhấn giữ một dòng bài để thêm vào playlist."
+            }
+            action={saveButton}
           />
         }
       />
+
+      {naming ? (
+        <TextPrompt
+          title="Lưu hàng đợi thành playlist"
+          hint={`${formatNumber(queueLength)} bài trong hàng đợi`}
+          placeholder="Tên playlist"
+          initialValue={seedLabel === null ? "Hàng đợi" : `Radio · ${seedLabel}`}
+          confirmLabel="Lưu"
+          onSubmit={save}
+          onClose={() => setNaming(false)}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -98,6 +158,29 @@ function PlaylistListRow({ playlist }: { playlist: PlaylistRow }) {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    marginBottom: spacing.lg,
+  },
+  headerAction: {
+    alignItems: "flex-start",
+  },
+  save: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.accent,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  savePressed: {
+    opacity: 0.75,
+  },
+  saveLabel: {
+    color: onAccent,
+    fontSize: font.sm,
+    fontWeight: "700",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
