@@ -57,6 +57,9 @@ async function main() {
     await expect(page.getByText(fixture.titles[0], { exact: true })).toBeVisible();
     await page.waitForTimeout(500);
     expect(hydrationErrors, "authenticated shell must hydrate cleanly").toEqual([]);
+    await expect(page.getByText("Có Vọng 9.9.9", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Để sau" }).click();
+    await expect(page.getByText("Có Vọng 9.9.9", { exact: true })).not.toBeVisible();
 
     await page.goto(`${origin}/search?q=S%C3%B3ng%20Th%E1%BB%AD%20Nghi%E1%BB%87m`);
     await expect(page.getByText(fixture.titles[0], { exact: true })).toBeVisible();

@@ -69,6 +69,7 @@ try {
   $env:VONG_E2E_AUDIO_PORT = [string]$audioPort
   $env:VONG_E2E_ARTIFACTS = $artifacts
   $env:VONG_E2E_WEB_ORIGIN = $webOrigin
+  $env:VONG_E2E_LATEST_VERSION = "9.9.9"
   $stateFile = Join-Path $artifacts "fixture.json"
   $env:VONG_E2E_STATE_FILE = $stateFile
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { UpdateBanner } from "@/components/update-banner";
 import "./globals.css";
 
 // Subset "vietnamese" là bắt buộc — thiếu nó thì ế, ộ, ữ sẽ rơi về font dự phòng.
@@ -64,7 +65,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <UpdateBanner />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

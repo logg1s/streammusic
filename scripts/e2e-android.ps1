@@ -170,6 +170,8 @@ try {
   $code = (Get-Content $handoffFile -Raw | ConvertFrom-Json).code
   Adb shell am start -a android.intent.action.VIEW -d "vong://auth?code=$code" $package
   Wait-Node "Trang chủ" 120 | Out-Null
+  Wait-Node "Có Vọng 9.9.9" 60 | Out-Null
+  Tap-Node "Để sau"
 
   Tap-Node "Bài hát"
   Wait-Node "Sóng Thử Nghiệm Ba" 60 | Out-Null

@@ -16,6 +16,7 @@ import { AnalyticsProvider } from "@/components/analytics-provider";
 import { FavoritesProvider } from "@/components/favorites-provider";
 import { PlaybackEngine } from "@/components/player/playback-engine";
 import { PlayerBar } from "@/components/player/player-bar";
+import { UpdateBanner } from "@/components/update-banner";
 import { adoptE2EHandoff, useSession } from "@/lib/api";
 import { colors, font, layout } from "@/theme";
 
@@ -50,6 +51,7 @@ export default function RootLayout() {
         <PlaybackEngine />
         <AnalyticsProvider />
         <E2EHandoffListener />
+        <UpdateBanner />
         <FavoritesProvider>
           <SessionGate />
         </FavoritesProvider>
