@@ -15,6 +15,14 @@
       "identifier": "http:default",
       "allow": [{ "url": "https://www.youtube.com/*" }]
     },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/logg1s/streammusic/releases/download/*"
+        }
+      ]
+    },
     "allow-play-track",
     "allow-stop",
     "allow-pause",
