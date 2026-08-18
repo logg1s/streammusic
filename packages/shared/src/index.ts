@@ -19,6 +19,9 @@ export type {
   TrackSource,
 } from "./types";
 
+export { isNewerVersion, isVongReleaseUrl } from "./update";
+export type { LatestRelease } from "./update";
+
 export {
   YOUTUBE_ID_PREFIX,
   parseYoutubeTrackId,
