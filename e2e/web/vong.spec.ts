@@ -83,7 +83,15 @@ test("thêm và mở danh sách Yêu thích", async ({ browser }) => {
     row.getByRole("button", { name: "Thêm vào Yêu thích" }),
   ).toBeVisible();
   // Thêm lại để Android và Windows kế tiếp xác nhận cùng dữ liệu cloud.
-  await row.getByRole("button", { name: "Thêm vào Yêu thích" }).click();
+  const [addAgainResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/favorites" &&
+        response.request().method() === "POST",
+    ),
+    row.getByRole("button", { name: "Thêm vào Yêu thích" }).click(),
+  ]);
+  expect(addAgainResponse.ok()).toBeTruthy();
 
   await page.goto("/favorites");
   await expect(page.getByRole("heading", { name: "Yêu thích" })).toBeVisible();
