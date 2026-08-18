@@ -67,3 +67,26 @@ test("tìm kiếm, playlist, phát nhạc, chuyển bài và phát nền", async
   await expect.poll(playingTime, { timeout: 10_000 }).toBeGreaterThan(before);
   await page.context().close();
 });
+
+test("thêm và mở danh sách Yêu thích", async ({ browser }) => {
+  const page = await loggedInPage(browser);
+  const data = await fixture();
+  await page.goto("/tracks");
+
+  const row = page.getByRole("listitem").filter({ hasText: data.titles[0] });
+  await row.getByRole("button", { name: "Thêm vào Yêu thích" }).click();
+  await expect(
+    row.getByRole("button", { name: "Bỏ khỏi Yêu thích" }),
+  ).toBeVisible();
+  await row.getByRole("button", { name: "Bỏ khỏi Yêu thích" }).click();
+  await expect(
+    row.getByRole("button", { name: "Thêm vào Yêu thích" }),
+  ).toBeVisible();
+  // Thêm lại để Android và Windows kế tiếp xác nhận cùng dữ liệu cloud.
+  await row.getByRole("button", { name: "Thêm vào Yêu thích" }).click();
+
+  await page.goto("/favorites");
+  await expect(page.getByRole("heading", { name: "Yêu thích" })).toBeVisible();
+  await expect(page.getByText(data.titles[0], { exact: true })).toBeVisible();
+  await page.context().close();
+});

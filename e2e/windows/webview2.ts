@@ -52,6 +52,8 @@ async function main() {
     await expect(page.getByText(fixture.titles[0], { exact: true })).toBeVisible();
     await page.goto(`${origin}/playlists`);
     await expect(page.getByText(fixture.playlistName, { exact: true })).toBeVisible();
+    await page.goto(`${origin}/favorites`);
+    await expect(page.getByText(fixture.titles[0], { exact: true })).toBeVisible();
 
     await page.goto(`${origin}/tracks`);
     const row = page

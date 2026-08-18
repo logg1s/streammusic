@@ -13,6 +13,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { AnalyticsProvider } from "@/components/analytics-provider";
+import { FavoritesProvider } from "@/components/favorites-provider";
 import { PlaybackEngine } from "@/components/player/playback-engine";
 import { PlayerBar } from "@/components/player/player-bar";
 import { adoptE2EHandoff, useSession } from "@/lib/api";
@@ -49,7 +50,9 @@ export default function RootLayout() {
         <PlaybackEngine />
         <AnalyticsProvider />
         <E2EHandoffListener />
-        <SessionGate />
+        <FavoritesProvider>
+          <SessionGate />
+        </FavoritesProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
@@ -147,6 +150,7 @@ function SessionGate() {
           }}
         />
         <Stack.Screen name="settings" options={{ title: "Cài đặt" }} />
+        <Stack.Screen name="favorites" options={{ title: "Yêu thích" }} />
         <Stack.Screen name="albums/[id]" options={{ title: "Album" }} />
         <Stack.Screen name="artists/[id]" options={{ title: "Nghệ sĩ" }} />
         <Stack.Screen name="playlists/[id]" options={{ title: "Playlist" }} />

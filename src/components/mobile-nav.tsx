@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Disc3, ListMusic, Radio, Search, Settings } from "lucide-react";
+import { Disc3, Heart, ListMusic, Radio, Search, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +11,7 @@ const TABS = [
   { href: "/albums", label: "Album", icon: Disc3 },
   { href: "/tracks", label: "Bài hát", icon: ListMusic },
   { href: "/search", label: "Tìm", icon: Search },
-  { href: "/settings", label: "Cài đặt", icon: Settings },
+  { href: "/favorites", label: "Yêu thích", icon: Heart },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -28,7 +28,16 @@ export function MobileHeader() {
         </span>
         <span className="text-base font-semibold tracking-tight">Vọng</span>
       </Link>
-      <ThemeToggle />
+      <div className="flex items-center gap-1">
+        <Link
+          href="/settings"
+          aria-label="Cài đặt"
+          className="grid size-8 place-items-center text-muted-foreground"
+        >
+          <Settings className="size-4" />
+        </Link>
+        <ThemeToggle />
+      </div>
     </header>
   );
 }
