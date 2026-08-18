@@ -50,7 +50,7 @@ npm i -g vercel
 vercel link
 vercel integration add neon --yes --no-claim
 vercel env pull .env.local --yes
-npm run db:push && npm run db:index
+npm run db:migrate && npm run db:index
 
 # 2. Fill AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET in .env.local (see "OAuth setup")
 
@@ -243,12 +243,14 @@ and serving them from the CDN.
 npm run dev         # dev server
 npm run build       # production build
 npm run typecheck   # tsc --noEmit (web and packages/shared)
+npm run verify:local # full local gate: web, shared, mobile, tests, build, Rust
+npm run e2e:all     # local E2E: web Playwright + Android ADB + Windows WebView2 CDP
 npm run check:youtube  # resolve a YouTube audio URL from this machine, measure real speed
 npm run tauri:dev   # Windows app (needs the dev server running)
 npm run tauri:build # package .exe + NSIS installer
-npm run db:push     # sync schema into Postgres
+npm run db:migrate  # apply committed Drizzle migrations
 npm run db:studio   # browse data with Drizzle Studio
-npm run db:index    # create extension + search indexes (once, after db:push)
+npm run db:index    # create extension + search indexes (once, after db:migrate)
 npm run verify      # prove tag reads only fetch 2–25% of each file (no DB/OAuth needed)
 npm run seed:demo   # demo library without OAuth (add -- --clean to remove)
 ```
@@ -286,9 +288,15 @@ and re-scans skip files whose `remoteRev` didn't change. To run scans without
 keeping a tab open, swap the `step` loop for
 [Vercel Workflow](https://vercel.com/docs/workflow).
 
-## Releases & CI
+## Verification & releases
 
-- Every push/PR to `master`: typecheck + lint (`.github/workflows/ci.yml`).
+- Run `npm run verify:local` before committing or releasing. Verification is
+  intentionally local; this repository does not run a GitHub CI workflow.
+- Run `npm run e2e:all` for deterministic login, library, search, playlist,
+  playback, next-track, and background-playback coverage on all three shells.
+  It requires the `Medium_Phone_API_36.0` Android AVD and an authenticated Neon
+  CLI. Fixture data stays on the schema-only `e2e-local` branch; failure
+  artifacts go to `%TEMP%\vong-e2e\<timestamp>`.
 - Pushing a `v*` tag builds the signed APK + Windows installer and attaches
   both to a GitHub Release (`.github/workflows/release.yml`). Repo secrets:
   `ANDROID_KEYSTORE_BASE64`, `VONG_UPLOAD_STORE_PASSWORD`.

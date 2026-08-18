@@ -54,11 +54,10 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 | Windows exe + installer | `release-windows` |
 | Tag + publish binaries | `github-release` |
 | Test on emulator/device | `verify-android` |
+| Long-running local delivery | `vong-goal-workflow` |
 
 ## Verification commands
 
 ```bash
-npm run typecheck && npx eslint .                    # web + shared
-cd mobile && npx tsc --noEmit && npx eslint .        # mobile
-cd src-tauri && cargo clippy 2>&1 | grep -E "error|warning"  # Rust
+npm run verify:local  # web + shared + tests + build + mobile + Rust
 ```

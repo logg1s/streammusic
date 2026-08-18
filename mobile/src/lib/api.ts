@@ -14,7 +14,8 @@ import { useEffect, useSyncExternalStore } from "react";
  */
 
 /** Nơi máy chủ ở, khai trong `app.json` để đổi được giữa dev và production mà không sửa code. */
-const configuredOrigin: unknown = Constants.expoConfig?.extra?.origin;
+const configuredOrigin: unknown =
+  process.env.EXPO_PUBLIC_VONG_ORIGIN ?? Constants.expoConfig?.extra?.origin;
 if (typeof configuredOrigin !== "string" || configuredOrigin.length === 0) {
   throw new Error(
     "Thiếu `expo.extra.origin` trong app.json — vỏ Expo không biết gọi máy chủ nào.",
@@ -153,6 +154,28 @@ async function saveSession(next: StoredSession): Promise<void> {
   loaded = true;
   await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify(next));
   broadcast();
+}
+
+/**
+ * Đổi mã trao tay đã được runner E2E phát sẵn. Hàm vẫn dùng đúng endpoint một-lần của
+ * luồng đăng nhập thật; chỉ màn `auth` trong bundle E2E mới gọi thẳng nó, nên bản phát
+ * hành không có đường tắt phiên hay token đóng cứng.
+ */
+export async function adoptE2EHandoff(code: string): Promise<void> {
+  if (process.env.EXPO_PUBLIC_VONG_E2E !== "1") {
+    throw new Error("Đăng nhập E2E không được bật trong bản dựng này.");
+  }
+
+  const response = await fetch(`${ORIGIN}/api/native/token`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+
+  const minted = parseSession(await response.json());
+  if (!minted) throw new Error("Máy chủ trả phiên không hợp lệ.");
+  await saveSession(minted);
 }
 
 async function clearSession(): Promise<void> {
@@ -314,7 +337,6 @@ export async function signIn(): Promise<boolean> {
 
   const minted = parseSession(await response.json());
   if (!minted) throw new Error("Máy chủ trả phiên không hợp lệ.");
-
   await saveSession(minted);
   return true;
 }

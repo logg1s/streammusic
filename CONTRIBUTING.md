@@ -99,18 +99,35 @@ only you can run.
 
 ## Verifying before you open a PR
 
-Run whichever of these apply to the shell(s) you touched:
+Run the complete local gate before committing or releasing:
 
 ```bash
-npm run typecheck && npx eslint .                            # web + packages/shared
-cd mobile && npx tsc --noEmit && npx eslint .                 # mobile
-cd src-tauri && cargo clippy 2>&1 | grep -E "error|warning"   # Windows / Rust
-npm run test                                                  # unit tests (packages/shared)
+npm run verify:local
 ```
 
-CI runs the web and mobile typecheck/lint on every PR. It does not currently
-run `cargo clippy` or `npm run test` — run them locally if you touched Rust
-or `packages/shared` logic.
+This covers web/shared typecheck and lint, unit tests, a production web build,
+mobile typecheck and lint, and Rust clippy. The repository intentionally has
+no GitHub CI workflow, so local verification is the release gate.
+
+For changes that can affect user flows or playback, run the local three-shell
+E2E suite as well:
+
+```bash
+npm run e2e:all
+```
+
+The runner seeds deterministic data into the schema-only Neon branch
+`e2e-local`, then checks the web app with Playwright, the Android release shell
+with ADB, and the Windows shell through WebView2 CDP. It never deploys or
+publishes anything, and it does not write fixture data to the production
+branch. Failures keep screenshots, logs, and browser traces under
+`%TEMP%\vong-e2e\<timestamp>` so the repository stays clean.
+
+Prerequisites are an authenticated Neon CLI, Edge/WebView2, Rust, JDK 17,
+Android SDK 36, and an AVD named `Medium_Phone_API_36.0`. The Android phase
+builds and installs its own local release APK; the Windows phase uses an
+isolated temporary WebView2 profile. Run `npm run verify:local` and
+`npm run e2e:all` before a local release.
 
 If your change affects Android and you have a device or emulator available,
 see the `verify-android` skill for how this project tests native playback —

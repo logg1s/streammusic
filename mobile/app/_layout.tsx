@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { ActivityIndicator, StatusBar, StyleSheet, View } from "react-native";
+import * as Linking from "expo-linking";
 import {
   DarkTheme,
   Stack,
@@ -14,7 +15,7 @@ import {
 import { AnalyticsProvider } from "@/components/analytics-provider";
 import { PlaybackEngine } from "@/components/player/playback-engine";
 import { PlayerBar } from "@/components/player/player-bar";
-import { useSession } from "@/lib/api";
+import { adoptE2EHandoff, useSession } from "@/lib/api";
 import { colors, font, layout } from "@/theme";
 
 /**
@@ -47,10 +48,30 @@ export default function RootLayout() {
         */}
         <PlaybackEngine />
         <AnalyticsProvider />
+        <E2EHandoffListener />
         <SessionGate />
       </ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+/** Nhận intent E2E ngay ở root; route `auth` có thể bị cổng phiên đẩy về login trước. */
+function E2EHandoffListener() {
+  useEffect(() => {
+    if (process.env.EXPO_PUBLIC_VONG_E2E !== "1") return;
+    const seen = new Set<string>();
+    const adopt = (url: string | null) => {
+      if (!url) return;
+      const code = Linking.parse(url).queryParams?.code;
+      if (typeof code !== "string" || code.length === 0 || seen.has(code)) return;
+      seen.add(code);
+      void adoptE2EHandoff(code);
+    };
+    void Linking.getInitialURL().then(adopt);
+    const subscription = Linking.addEventListener("url", ({ url }) => adopt(url));
+    return () => subscription.remove();
+  }, []);
+  return null;
 }
 
 /**

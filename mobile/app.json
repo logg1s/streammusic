@@ -21,6 +21,7 @@
       "expo-web-browser",
       "./modules/vong-audio/app.plugin.js",
       "expo-splash-screen",
+      "./plugins/with-e2e-network.js",
       "./plugins/with-release-signing.js"
     ],
     "extra": {

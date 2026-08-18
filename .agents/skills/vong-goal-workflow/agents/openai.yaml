@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vong Goal Workflow"
+  short_description: "Automate verified local delivery for Vong"
+  default_prompt: "Use $vong-goal-workflow to complete this Vong objective through local verification."
