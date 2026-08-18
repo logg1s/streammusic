@@ -31,6 +31,7 @@ rodio = { version = "0.22.2", default-features = false, features = [
   "flac",
   "mp3",
   "vorbis",
+  "wav",
 ] }
 # Rule của repo: dùng parking_lot khi lock được unwrap ngay — guard trả thẳng, không có
 # nhánh poisoning để phải unwrap.

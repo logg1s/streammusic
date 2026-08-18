@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { adoptE2EHandoff } from "@/lib/api";
 import { colors } from "@/theme";
 
 /**
@@ -16,10 +17,15 @@ import { colors } from "@/theme";
  */
 export default function AuthLandingScreen() {
   const router = useRouter();
+  const { code } = useLocalSearchParams<{ code?: string }>();
 
   useEffect(() => {
+    if (process.env.EXPO_PUBLIC_VONG_E2E === "1" && typeof code === "string") {
+      void adoptE2EHandoff(code).catch(() => router.replace("/login"));
+      return;
+    }
     router.replace("/");
-  }, [router]);
+  }, [code, router]);
 
   return (
     <View style={styles.screen}>

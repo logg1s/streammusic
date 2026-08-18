@@ -16,6 +16,7 @@
       "allow": [{ "url": "https://www.youtube.com/*" }]
     },
     "allow-play-track",
+    "allow-stop",
     "allow-pause",
     "allow-resume",
     "allow-seek",

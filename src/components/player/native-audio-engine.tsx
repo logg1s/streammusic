@@ -240,6 +240,8 @@ export function NativeAudioEngine() {
         store.setError(
           error instanceof Error
             ? error.message
+            : typeof error === "string"
+              ? error
             : "Không phát được bài này trên máy này.",
         );
 
