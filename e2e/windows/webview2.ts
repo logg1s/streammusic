@@ -36,10 +36,18 @@ async function main() {
     const context = browser.contexts()[0];
     const pages = context.pages();
     const page = pages[0];
+    const hydrationErrors: string[] = [];
+    page.on("pageerror", (error) => {
+      if (/hydration|Minified React error #418/i.test(error.message)) {
+        hydrationErrors.push(error.message);
+      }
+    });
     // Tauri reuses its WebView2 profile between runs. Isolate the E2E session from
     // a developer's persisted auth/player queue before installing the fixture.
     await context.clearCookies();
     await page.goto(origin);
+    await page.waitForTimeout(500);
+    expect(hydrationErrors, "login must hydrate without replacing its DOM").toEqual([]);
     await page.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
@@ -47,6 +55,8 @@ async function main() {
     await context.addCookies([{ ...fixture.cookie, url: origin }]);
     await page.goto(`${origin}/tracks`);
     await expect(page.getByText(fixture.titles[0], { exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(hydrationErrors, "authenticated shell must hydrate cleanly").toEqual([]);
 
     await page.goto(`${origin}/search?q=S%C3%B3ng%20Th%E1%BB%AD%20Nghi%E1%BB%87m`);
     await expect(page.getByText(fixture.titles[0], { exact: true })).toBeVisible();

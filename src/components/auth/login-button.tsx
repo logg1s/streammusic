@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { isTauri } from "@/components/player/native-audio-engine";
+import { isTauriRuntime } from "@/lib/runtime";
 
 /**
  * Nút đăng nhập, hai đường tuỳ vỏ.
@@ -19,37 +19,29 @@ export function LoginButton({
 }: {
   signInWithGoogle: () => Promise<void>;
 }) {
-  const [native] = useState(isTauri);
   const [waiting, setWaiting] = useState(false);
 
-  if (native) {
-    return (
-      <button
-        type="button"
-        disabled={waiting}
-        onClick={async () => {
-          setWaiting(true);
-          try {
-            const { openUrl } = await import("@tauri-apps/plugin-opener");
-            await openUrl(`${window.location.origin}/api/native/authorize`);
-          } finally {
-            // Người dùng có thể tắt tab browser mà không đăng nhập, nên nút phải
-            // bấm lại được ngay chứ không chờ deep link.
-            setWaiting(false);
-          }
-        }}
-        className="w-full rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-foreground transition-transform hover:scale-[1.02] disabled:opacity-60"
-      >
-        Đăng nhập bằng Google
-      </button>
-    );
-  }
-
   return (
-    <form action={signInWithGoogle}>
+    <form
+      action={signInWithGoogle}
+      onSubmit={async (event) => {
+        if (!isTauriRuntime()) return;
+        event.preventDefault();
+        setWaiting(true);
+        try {
+          const { openUrl } = await import("@tauri-apps/plugin-opener");
+          await openUrl(`${window.location.origin}/api/native/authorize`);
+        } finally {
+          // Người dùng có thể tắt tab browser mà không đăng nhập, nên nút phải
+          // bấm lại được ngay chứ không chờ deep link.
+          setWaiting(false);
+        }
+      }}
+    >
       <button
         type="submit"
-        className="w-full rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-foreground transition-transform hover:scale-[1.02]"
+        disabled={waiting}
+        className="w-full rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-foreground transition-transform hover:scale-[1.02] disabled:opacity-60"
       >
         Đăng nhập bằng Google
       </button>

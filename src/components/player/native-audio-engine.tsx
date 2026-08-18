@@ -50,11 +50,6 @@ interface TickPayload {
   ended: boolean;
 }
 
-/** Vỏ Tauri có `invoke`/`listen` không? Đọc một lần, không đổi trong phiên. */
-export function isTauri(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
-
 /**
  * `fetch` của `plugin-http`, đã gỡ header `Origin`.
  *
