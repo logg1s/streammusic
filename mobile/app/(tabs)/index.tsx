@@ -1,5 +1,6 @@
-import { useRouter } from "expo-router";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { useRouter, type Href } from "expo-router";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { PlayableTrack } from "@vong/shared";
 import { ALBUM_CARD_WIDTH, AlbumCard, ArtistRow } from "@/components/album-card";
 import {
@@ -74,6 +75,16 @@ export default function HomeScreen() {
   return (
     <Screen scroll refreshing={home.loading} onRefresh={reloadAll}>
       <Readout text={formatLibraryStats(data.stats)} />
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/favorites" as Href)}
+        style={({ pressed }) => [styles.favoriteLink, pressed && styles.pressed]}
+      >
+        <Ionicons name="heart" size={18} color={colors.accent} />
+        <Text style={styles.favoriteText}>Yêu thích</Text>
+        <Ionicons name="chevron-forward" size={17} color={colors.muted} />
+      </Pressable>
 
       {empty ? (
         <EmptyNote
@@ -199,5 +210,24 @@ const styles = StyleSheet.create({
     color: colors.subtle,
     fontSize: font.xs,
     marginBottom: spacing.xl,
+  },
+  favoriteLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.md,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+  },
+  favoriteText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: font.sm,
+    fontWeight: "600",
+  },
+  pressed: {
+    opacity: 0.65,
   },
 });

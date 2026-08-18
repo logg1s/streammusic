@@ -427,6 +427,39 @@ export const playlistItems = pgTable(
   ],
 );
 
+/** Một bài yêu thích là bài thư viện HOẶC video YouTube, duy nhất theo từng user. */
+export const favorites = pgTable(
+  "favorites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    trackId: uuid("track_id").references(() => tracks.id, {
+      onDelete: "cascade",
+    }),
+    youtubeVideoId: text("youtube_video_id").references(
+      () => youtubeTracks.videoId,
+      { onDelete: "cascade" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "favorites_one_source",
+      sql`(${t.trackId} is null) <> (${t.youtubeVideoId} is null)`,
+    ),
+    uniqueIndex("favorites_user_track_uq").on(t.userId, t.trackId),
+    uniqueIndex("favorites_user_youtube_uq").on(
+      t.userId,
+      t.youtubeVideoId,
+    ),
+    index("favorites_user_created_idx").on(t.userId, t.createdAt),
+  ],
+);
+
 /** Một user nối đúng một tài khoản YouTube; token mã hoá bằng đúng cơ chế của connections. */
 export const youtubeAccounts = pgTable("youtube_accounts", {
   userId: text("user_id")

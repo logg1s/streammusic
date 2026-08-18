@@ -1,8 +1,10 @@
 import { memo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { PlayableTrack } from "@vong/shared";
 import { AddToPlaylistSheet } from "@/components/add-to-playlist-sheet";
 import { Artwork } from "@/components/artwork";
+import { useFavorites } from "@/components/favorites-provider";
 import { formatDuration, trackSubtitle } from "@/lib/format";
 import { startRadioFor } from "@/lib/radio-engine";
 import { useIsCurrentTrack, usePlayer } from "@/store/player";
@@ -39,6 +41,8 @@ export const TrackRow = memo(function TrackRow({
 }) {
   const isCurrent = useIsCurrentTrack(track.id);
   const [adding, setAdding] = useState(false);
+  const favorites = useFavorites();
+  const favorite = favorites.ids.has(track.id);
 
   return (
     <>
@@ -79,6 +83,25 @@ export const TrackRow = memo(function TrackRow({
         {track.source === "youtube" ? (
           <Text style={styles.badge}>YT</Text>
         ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            favorite ? "Bỏ khỏi Yêu thích" : "Thêm vào Yêu thích"
+          }
+          disabled={favorites.pending.has(track.id)}
+          hitSlop={spacing.sm}
+          onPress={(event) => {
+            event.stopPropagation();
+            void favorites.toggle(track.id).catch(() => undefined);
+          }}
+          style={styles.favorite}
+        >
+          <Ionicons
+            name={favorite ? "heart" : "heart-outline"}
+            size={18}
+            color={favorite ? colors.accent : colors.muted}
+          />
+        </Pressable>
         <Text style={styles.duration}>{formatDuration(track.durationSec)}</Text>
       </Pressable>
 
@@ -136,5 +159,11 @@ const styles = StyleSheet.create({
     color: colors.subtle,
     fontSize: font.xs,
     fontVariant: ["tabular-nums"],
+  },
+  favorite: {
+    width: 28,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

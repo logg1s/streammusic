@@ -173,6 +173,8 @@ try {
 
   Tap-Node "Bài hát"
   Wait-Node "Sóng Thử Nghiệm Ba" 60 | Out-Null
+  Tap-Node "Thêm vào Yêu thích"
+  Wait-Node "Bỏ khỏi Yêu thích" 60 | Out-Null
   Tap-Node "Sóng Thử Nghiệm Ba"
   # MediaSession is the authoritative playback oracle. The RN accessibility tree
   # can miss a short-lived label update while uiautomator is serialising it.
@@ -217,6 +219,9 @@ try {
   Adb shell input keyevent KEYCODE_BACK
   Tap-Node "Playlist"
   Wait-Node "Playlist E2E Ổn Định" 60 | Out-Null
+  Tap-Node "Trang chủ"
+  Tap-Node "Yêu thích"
+  Wait-Node "Sóng Thử Nghiệm Ba" 60 | Out-Null
   Write-Host "Android E2E passed"
 } catch {
   Save-Diagnostics

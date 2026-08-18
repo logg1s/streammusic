@@ -60,7 +60,10 @@ try {
 
   $databaseUrl = (& npx.cmd neon connection-string $branchName --project-id $projectId --pooled --output json | Out-String).Trim()
   if (-not $databaseUrl.StartsWith("postgresql://")) { throw "Neon không trả connection string hợp lệ" }
+  $parentDatabaseUrl = (& npx.cmd neon connection-string main --project-id $projectId --pooled --output json | Out-String).Trim()
+  if (-not $parentDatabaseUrl.StartsWith("postgresql://")) { throw "Neon không trả connection string main hợp lệ" }
   $env:DATABASE_URL = $databaseUrl
+  $env:VONG_E2E_PARENT_DATABASE_URL = $parentDatabaseUrl
   $env:AUTH_URL = $webOrigin
   $env:NEXTAUTH_URL = $webOrigin
   $env:VONG_E2E_AUDIO_PORT = [string]$audioPort
@@ -68,6 +71,14 @@ try {
   $env:VONG_E2E_WEB_ORIGIN = $webOrigin
   $stateFile = Join-Path $artifacts "fixture.json"
   $env:VONG_E2E_STATE_FILE = $stateFile
+
+  # Apply committed migrations only to the schema-only E2E branch. Production is
+  # never touched by this runner. Schema-only branches omit migration table rows,
+  # so copy that metadata from main before applying local pending migrations.
+  & npx.cmd tsx scripts/e2e-baseline-migrations.ts *> (Join-Path $artifacts "db-baseline.log")
+  if ($LASTEXITCODE -ne 0) { throw "Không baseline được migration journal E2E" }
+  & npx.cmd drizzle-kit migrate *> (Join-Path $artifacts "db-migrate.log")
+  if ($LASTEXITCODE -ne 0) { throw "Không migrate được Neon branch E2E" }
 
   $audio = Start-LoggedProcess -Name "audio" -FilePath "npx.cmd" `
     -ArgumentList @("tsx", "scripts/e2e-audio-server.ts") -WorkingDirectory $repo

@@ -7,9 +7,11 @@ import {
   ListStart,
   Play,
   Radio,
+  Heart,
   X,
 } from "lucide-react";
 import { AddToPlaylist } from "@/components/library/add-to-playlist";
+import { useFavorites } from "@/components/favorites-provider";
 import { Cover } from "@/components/library/cover";
 import { Equalizer } from "@/components/player/equalizer";
 import { useRadioConfig } from "@/components/player/radio-context";
@@ -36,6 +38,8 @@ interface TrackListProps {
    * xuyên suốt. Cần radio bật (luôn bật trên web); tắt thì rơi về phát cả danh sách.
    */
   radioOnTap?: boolean;
+  /** Ẩn ngay dòng vừa bỏ thích ở trang Yêu thích. */
+  hideUnfavorited?: boolean;
 }
 
 /* Nút phụ chỉ hiện khi trỏ vào dòng, nhưng luôn hiện khi được focus bằng bàn phím. */
@@ -57,7 +61,9 @@ export function TrackList({
   onRemove,
   onMove,
   radioOnTap = false,
+  hideUnfavorited = false,
 }: TrackListProps) {
+  const favorites = useFavorites();
   const radioEnabled = useRadioConfig().enabled;
   const playQueue = usePlayer((s) => s.playQueue);
   const currentId = usePlayer((s) => s.queue[s.order[s.position]]?.id);
@@ -65,18 +71,22 @@ export function TrackList({
   const insertNext = usePlayer((s) => s.insertNext);
   const appendTracks = usePlayer((s) => s.appendTracks);
 
-  if (tracks.length === 0) {
+  const visibleTracks = hideUnfavorited
+    ? tracks.filter((track) => favorites.ids.has(track.id))
+    : tracks;
+
+  if (visibleTracks.length === 0) {
     return <p className="py-8 text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
   const onTap = (track: PlayableTrack, index: number) => {
     if (radioOnTap && radioEnabled) startRadioFor(track);
-    else playQueue(tracks, index);
+    else playQueue(visibleTracks, index);
   };
 
   return (
     <ol className="divide-y divide-border">
-      {tracks.map((track, index) => {
+      {visibleTracks.map((track, index) => {
         const isCurrent = track.id === currentId;
         return (
           <li key={track.id} className="group/row flex items-center gap-1">
@@ -158,6 +168,34 @@ export function TrackList({
 
             <button
               type="button"
+              aria-label={
+                favorites.ids.has(track.id)
+                  ? "Bỏ khỏi Yêu thích"
+                  : "Thêm vào Yêu thích"
+              }
+              title={
+                favorites.ids.has(track.id)
+                  ? "Bỏ khỏi Yêu thích"
+                  : "Thêm vào Yêu thích"
+              }
+              disabled={favorites.pending.has(track.id)}
+              onClick={() => void favorites.toggle(track.id).catch(() => undefined)}
+              className={cn(
+                ROW_ACTION,
+                favorites.ids.has(track.id) &&
+                  "opacity-100 text-accent-text",
+              )}
+            >
+              <Heart
+                className={cn(
+                  "size-4",
+                  favorites.ids.has(track.id) && "fill-current",
+                )}
+              />
+            </button>
+
+            <button
+              type="button"
               aria-label="Phát tiếp"
               title="Phát tiếp"
               onClick={() => insertNext(track)}
@@ -194,7 +232,7 @@ export function TrackList({
                   type="button"
                   aria-label="Xuống dưới"
                   title="Xuống dưới"
-                  disabled={index === tracks.length - 1}
+                  disabled={index === visibleTracks.length - 1}
                   onClick={() => onMove(index, 1)}
                   className={cn(ROW_ACTION, "disabled:opacity-20")}
                 >
