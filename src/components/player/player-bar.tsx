@@ -58,7 +58,7 @@ export function PlayerBar() {
               <IconButton
                 label="Radio bài này"
                 onClick={() => track && startRadioFor(track)}
-                disabled={!track}
+                disabled={!track || track.source !== "youtube"}
                 active={radioOn}
               >
                 <Radio className="size-4" />

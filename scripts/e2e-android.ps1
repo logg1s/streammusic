@@ -81,6 +81,16 @@ function Wait-Node {
   $found = $null
   Wait-Until -Description "UI /$Pattern/" -TimeoutSec $TimeoutSec -Condition {
     $script:found = Find-Node $Pattern
+    if ($null -eq $script:found) {
+      $focus = (& $adb shell dumpsys activity activities | Select-String -Pattern "topResumedActivity" | Out-String)
+      if ($focus -notmatch [regex]::Escape($package)) {
+        # Google Play có thể cập nhật Android System WebView giữa lượt chạy. Android
+        # chủ động giết mọi app đang dùng WebView; mở lại Vọng và tiếp tục từ state đã
+        # lưu thay vì báo nhầm thành crash sản phẩm.
+        & $adb shell monkey -p $package -c android.intent.category.LAUNCHER 1 *> $null
+        Start-Sleep -Seconds 1
+      }
+    }
     return $null -ne $script:found
   }
   return $script:found
@@ -173,7 +183,7 @@ try {
   Wait-Node "Có Vọng 9.9.9" 60 | Out-Null
   Tap-Node "Để sau"
 
-  Tap-Node "Bài hát"
+  Tap-Node "Thư viện"
   Wait-Node "Sóng Thử Nghiệm Ba" 60 | Out-Null
   Tap-Node "Thêm vào Yêu thích"
   Wait-Node "Bỏ khỏi Yêu thích" 60 | Out-Null
@@ -219,6 +229,7 @@ try {
   Wait-Node "Sóng Thử Nghiệm Một" 90 | Out-Null
 
   Adb shell input keyevent KEYCODE_BACK
+  Tap-Node "Thư viện"
   Tap-Node "Playlist"
   Wait-Node "Playlist E2E Ổn Định" 60 | Out-Null
   Tap-Node "Trang chủ"

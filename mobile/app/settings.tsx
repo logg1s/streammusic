@@ -21,7 +21,6 @@ import { apiFetch, apiJson, signOut } from "@/lib/api";
 import type { ConnectionsSummary, YoutubeSyncResult } from "@/lib/dto";
 import { openOAuthFlow } from "@/lib/oauth";
 import { errorMessage, useApi } from "@/lib/use-api";
-import { usePlayer } from "@/store/player";
 import { colors, font, onAccent, radius, spacing } from "@/theme";
 
 /**
@@ -35,8 +34,6 @@ export default function SettingsScreen() {
   const { data, error, loading, reload } = useApi<ConnectionsSummary>(
     "/api/connections",
   );
-  const autoplay = usePlayer((s) => s.autoplay);
-  const setAutoplay = usePlayer((s) => s.setAutoplay);
 
   const [ytBusy, setYtBusy] = useState(false);
   const [ytError, setYtError] = useState<string | null>(null);
@@ -110,24 +107,6 @@ export default function SettingsScreen() {
 
   return (
     <Screen scroll refreshing={loading} onRefresh={reload}>
-      <View style={styles.section}>
-        <SectionHeader label="Phát nhạc" />
-        <View style={styles.row}>
-          <View style={styles.rowBody}>
-            <Text style={styles.rowTitle}>Tự phát tiếp</Text>
-            <Text style={styles.rowMeta}>
-              Hết album/playlist thì tự phát bài đề xuất theo gu.
-            </Text>
-          </View>
-          <Switch
-            value={autoplay}
-            onValueChange={setAutoplay}
-            trackColor={{ true: colors.accent, false: colors.surfaceElevated }}
-            thumbColor={colors.text}
-          />
-        </View>
-      </View>
-
       <View style={styles.section}>
         <SectionHeader label="Riêng tư" />
         <View style={styles.row}>

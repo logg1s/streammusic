@@ -287,56 +287,62 @@ export function NativeAudioEngine() {
   // 5. Event từ Rust: nhịp thời gian, hết bài, và các nút trên thanh media của Windows.
   useEffect(() => {
     let disposed = false;
-    const offs: Array<() => void> = [];
 
-    void import("@tauri-apps/api/event").then(async ({ listen }) => {
-      const add = async (
-        name: string,
-        handler: (payload: unknown) => void,
-      ) => {
-        const off = await listen(name, (event) => handler(event.payload));
-        if (disposed) off();
-        else offs.push(off);
-      };
+    void import("@tauri-apps/api/event")
+      .then(async ({ listen }) => {
+        const add = async (
+          name: string,
+          handler: (payload: unknown) => void,
+        ) => {
+          await listen(name, (event) => {
+            if (!disposed) handler(event.payload);
+          });
+        };
 
-      await add("player://tick", (payload) => {
-        const tick = payload as TickPayload;
-        if (loadingRef.current) return;
-        // Bằng chứng duy nhất được chấp nhận là "bài này phát được": có tiếng và đồng
-        // hồ đã chạy. Reset theo "nạp xong" thì bộ đếm không bao giờ chạm trần trong
-        // đúng trường hợp nó sinh ra để chặn.
-        if (tick.playing && tick.posMs > 0) failuresRef.current = 0;
-        const store = usePlayer.getState();
-        // Rust chỉ biết thời lượng qua metadata gửi kèm; thiếu thì giữ lấy con số
-        // trong hàng đợi, đừng trả 0 làm scrubber sập về đầu.
-        const durSec =
-          tick.durMs > 0 ? tick.durMs / 1000 : (store.duration ?? 0);
-        store.syncTime(tick.posMs / 1000, durSec);
-        store.syncPlaying(tick.playing);
+        await add("player://tick", (payload) => {
+          const tick = payload as TickPayload;
+          if (loadingRef.current) return;
+          // Bằng chứng duy nhất được chấp nhận là "bài này phát được": có tiếng và đồng
+          // hồ đã chạy. Reset theo "nạp xong" thì bộ đếm không bao giờ chạm trần trong
+          // đúng trường hợp nó sinh ra để chặn.
+          if (tick.playing && tick.posMs > 0) failuresRef.current = 0;
+          const store = usePlayer.getState();
+          // Rust chỉ biết thời lượng qua metadata gửi kèm; thiếu thì giữ lấy con số
+          // trong hàng đợi, đừng trả 0 làm scrubber sập về đầu.
+          const durSec =
+            tick.durMs > 0 ? tick.durMs / 1000 : (store.duration ?? 0);
+          store.syncTime(tick.posMs / 1000, durSec);
+          store.syncPlaying(tick.playing);
+        });
+        await add("player://ended", () => {
+          if (loadingRef.current) return;
+          // Nhả `loadedRef` rồi bơm nonce: lặp một bài giữ nguyên `trackId`, không có
+          // nonce thì effect nạp bài không bao giờ chạy lại.
+          loadedRef.current = null;
+          usePlayer.getState().handleEnded();
+          setReloadNonce((n) => n + 1);
+        });
+        await add("player://next", () => usePlayer.getState().next());
+        await add("player://previous", () => usePlayer.getState().previous());
+        await add("player://playing", (payload) =>
+          usePlayer.getState().syncPlaying(payload === true),
+        );
+        await add("player://seeked", (payload) => {
+          if (typeof payload === "number") {
+            usePlayer.getState().syncTime(payload, usePlayer.getState().duration);
+          }
+        });
+      })
+      .catch((error: unknown) => {
+        if (!disposed) console.error("Không đăng ký được listener audio Tauri", error);
       });
-      await add("player://ended", () => {
-        if (loadingRef.current) return;
-        // Nhả `loadedRef` rồi bơm nonce: lặp một bài giữ nguyên `trackId`, không có
-        // nonce thì effect nạp bài không bao giờ chạy lại.
-        loadedRef.current = null;
-        usePlayer.getState().handleEnded();
-        setReloadNonce((n) => n + 1);
-      });
-      await add("player://next", () => usePlayer.getState().next());
-      await add("player://previous", () => usePlayer.getState().previous());
-      await add("player://playing", (payload) =>
-        usePlayer.getState().syncPlaying(payload === true),
-      );
-      await add("player://seeked", (payload) => {
-        if (typeof payload === "number") {
-          usePlayer.getState().syncTime(payload, usePlayer.getState().duration);
-        }
-      });
-    });
 
     return () => {
+      // Listener sống cùng JS document. Không gọi UnlistenFn ở đây: WebView2 có thể
+      // đã xoá callback bridge trước cleanup React trong lúc reload, khiến unlisten
+      // ném unhandled rejection. Callback cũ bị biến thành no-op; document hủy thì
+      // Tauri tự thu hồi listener. Cách này cũng chặn callback trùng của Strict Mode.
       disposed = true;
-      offs.forEach((off) => off());
     };
   }, []);
 

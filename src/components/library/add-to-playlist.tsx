@@ -15,14 +15,26 @@ import { formatNumber } from "@/lib/utils";
 export function AddToPlaylist({
   track,
   className,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   track: PlayableTrack;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [items, setItems] = useState<PlaylistSummary[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const open = controlledOpen ?? uncontrolledOpen;
+
+  const setOpen = (nextOpen: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
 
   useEffect(() => {
     if (!open || items !== null) return;
@@ -85,15 +97,17 @@ export function AddToPlaylist({
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="Thêm vào playlist"
-        title="Thêm vào playlist"
-        onClick={() => setOpen(true)}
-        className={className}
-      >
-        <ListPlus className="size-4" />
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          aria-label="Thêm vào playlist"
+          title="Thêm vào playlist"
+          onClick={() => setOpen(true)}
+          className={className}
+        >
+          <ListPlus className="size-4" />
+        </button>
+      )}
 
       {open && (
         <div

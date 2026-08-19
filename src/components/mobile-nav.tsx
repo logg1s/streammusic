@@ -1,17 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Disc3, Heart, ListMusic, Radio, Search, Settings } from "lucide-react";
+import { House, LibraryBig, Search, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { href: "/", label: "Mới", icon: Radio },
-  { href: "/albums", label: "Album", icon: Disc3 },
-  { href: "/tracks", label: "Bài hát", icon: ListMusic },
-  { href: "/search", label: "Tìm", icon: Search },
-  { href: "/favorites", label: "Yêu thích", icon: Heart },
+  { href: "/", label: "Trang chủ", icon: House },
+  { href: "/search", label: "Tìm kiếm", icon: Search },
+  { href: "/tracks", label: "Thư viện", icon: LibraryBig },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -22,11 +21,15 @@ function isActive(pathname: string, href: string) {
 export function MobileHeader() {
   return (
     <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:hidden">
-      <Link href="/" className="flex items-center gap-2">
-        <span className="grid size-5 place-items-center rounded-full border border-accent">
-          <span className="size-1.5 rounded-full bg-accent" />
-        </span>
-        <span className="text-base font-semibold tracking-tight">Vọng</span>
+      <Link href="/" className="flex h-8 items-center" aria-label="Vọng — Trang chủ">
+        <Image
+          src="/brand/vong-wordmark.png"
+          alt="Vọng"
+          width={74}
+          height={33}
+          priority
+          className="h-auto w-[74px]"
+        />
       </Link>
       <div className="flex items-center gap-1">
         <Link
@@ -52,7 +55,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="Điều hướng chính"
-      className="border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
       <ul className="flex">
         {TABS.map(({ href, label, icon: Icon }) => {

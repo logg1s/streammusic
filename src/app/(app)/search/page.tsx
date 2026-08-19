@@ -1,6 +1,7 @@
 import { AlbumGrid } from "@/components/library/album-grid";
 import { TrackList } from "@/components/library/track-list";
 import { YoutubeSearch } from "@/components/library/youtube-search";
+import { SearchBox } from "@/components/library/search-box";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { searchLibrary } from "@/lib/library";
@@ -25,7 +26,7 @@ export default async function SearchPage({
   return (
     <>
       <PageHeader
-        eyebrow="Thư viện và YouTube"
+        eyebrow="Thư viện · YouTube"
         title="Tìm kiếm"
         readout={
           query
@@ -34,20 +35,7 @@ export default async function SearchPage({
         }
       />
 
-      <form action="/search" method="get" className="mb-10">
-        <label htmlFor="q" className="sr-only">
-          Từ khoá
-        </label>
-        <input
-          id="q"
-          name="q"
-          type="search"
-          defaultValue={query}
-          autoFocus
-          placeholder="Nhập tên bài, nghệ sĩ hoặc album"
-          className="w-full max-w-xl rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-subtle focus:border-accent focus:outline-none"
-        />
-      </form>
+      <SearchBox key={query} initialQuery={query} />
 
       {query && found === 0 && (
         <p className="mb-8 text-sm text-muted-foreground">

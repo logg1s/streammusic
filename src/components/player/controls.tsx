@@ -153,6 +153,7 @@ export function Scrubber({ className }: { className?: string }) {
   const isBuffering = usePlayer((s) => s.isBuffering);
 
   const barRef = useRef<HTMLDivElement>(null);
+  const scrubRef = useRef<number | null>(null);
   const [scrubTo, setScrubTo] = useState<number | null>(null);
 
   const shown = scrubTo ?? currentTime;
@@ -186,14 +187,24 @@ export function Scrubber({ className }: { className?: string }) {
         onPointerDown={(e) => {
           if (!hasQueue) return;
           e.currentTarget.setPointerCapture(e.pointerId);
-          setScrubTo(positionFromEvent(e.clientX));
+          const next = positionFromEvent(e.clientX);
+          scrubRef.current = next;
+          setScrubTo(next);
         }}
         onPointerMove={(e) => {
-          if (scrubTo === null) return;
-          setScrubTo(positionFromEvent(e.clientX));
+          if (scrubRef.current === null) return;
+          const next = positionFromEvent(e.clientX);
+          scrubRef.current = next;
+          setScrubTo(next);
         }}
         onPointerUp={() => {
-          if (scrubTo !== null) seek(scrubTo);
+          const target = scrubRef.current;
+          scrubRef.current = null;
+          if (target !== null) seek(target);
+          setScrubTo(null);
+        }}
+        onPointerCancel={() => {
+          scrubRef.current = null;
           setScrubTo(null);
         }}
         onKeyDown={(e) => {

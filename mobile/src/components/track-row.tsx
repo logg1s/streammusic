@@ -20,8 +20,8 @@ export const TRACK_ROW_HEIGHT = 60;
  * người ta chờ đợi. Lệnh phát đi qua store dùng chung, không bao giờ gọi module native
  * trực tiếp.
  *
- * `radioOnTap` cho danh sách "bài lẻ" (nghe gần đây, kết quả tìm, gợi ý): bấm là seed
- * radio từ đúng bài đó thay vì phát cả danh sách. Ở album/playlist thì để tắt.
+ * Nguồn bài quyết định hành vi: YouTube mở danh sách kết hợp; thư viện phát đúng
+ * hàng đợi hữu hạn. `radioOnTap` còn trong props để tương thích nơi gọi cũ.
  *
  * Nhấn giữ mở hộp thêm vào playlist. Không có nút riêng: dòng bài chỉ cao 60px và đã
  * mang bìa, tiêu đề, huy hiệu YT và thời lượng — thêm một nút nữa là chật.
@@ -31,7 +31,6 @@ export const TrackRow = memo(function TrackRow({
   tracks,
   index,
   showArtwork = true,
-  radioOnTap = false,
 }: {
   track: PlayableTrack;
   tracks: PlayableTrack[];
@@ -48,7 +47,7 @@ export const TrackRow = memo(function TrackRow({
     <>
       <Pressable
         onPress={() => {
-          if (radioOnTap) void startRadioFor(track);
+          if (track.source === "youtube") void startRadioFor(track);
           else usePlayer.getState().playQueue(tracks, index);
         }}
         onLongPress={() => setAdding(true)}

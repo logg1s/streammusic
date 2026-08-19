@@ -40,7 +40,8 @@ export function autoplaySeed(state: PlayerState): PlayableTrack | null {
   const { queue, order, position } = state;
   if (order.length === 0) return null;
   if (order.length - 1 - position > REFILL_THRESHOLD) return null;
-  return queue[order[position]] ?? null;
+  const seed = queue[order[position]] ?? null;
+  return seed?.source === "youtube" ? seed : null;
 }
 const REFILL_BATCH = 10;
 
@@ -126,7 +127,7 @@ export interface PlayedTrack {
 
 export interface RadioClient {
   startRadioFor(seed: PlayableTrack): Promise<void>;
-  refillRadio(seedId: string, exclude: string[]): Promise<void>;
+  refillRadio(continuation: string, exclude: string[]): Promise<void>;
   /** Ghi lịch sử nghe + tín hiệu skip/finish cho radio. */
   reportPlayed(last: PlayedTrack): void;
   /** Bài không phát được (id hỏng, bị chặn nhúng) → đừng gợi ý lại. */
@@ -166,14 +167,22 @@ export function createRadioClient(
     }
   }
 
+  interface RadioPage {
+    tracks: PlayableTrack[];
+    continuation: string | null;
+    playlistId: string | null;
+  }
+
   const fetchBatch = async (
-    seedId: string,
+    page: { seedId: string } | { continuation: string },
     exclude: string[],
     limit: number,
-  ): Promise<PlayableTrack[]> => {
-    const res = await post("/api/radio", { seedId, exclude, limit });
+  ): Promise<RadioPage> => {
+    const res = await post("/api/radio", { ...page, exclude, limit });
     const body = (await res.json()) as {
       tracks?: PlayableTrack[];
+      continuation?: string | null;
+      playlistId?: string | null;
       error?: string;
     };
     if (!res.ok) {
@@ -185,7 +194,11 @@ export function createRadioClient(
         res.status === 429 ? "quota" : "network",
       );
     }
-    return body.tracks ?? [];
+    return {
+      tracks: body.tracks ?? [],
+      continuation: body.continuation ?? null,
+      playlistId: body.playlistId ?? null,
+    };
   };
 
   /**
@@ -210,30 +223,49 @@ export function createRadioClient(
 
   return {
     async startRadioFor(seed) {
+      // File thư viện/Drive là hàng đợi hữu hạn: phát xong thì dừng, không gợi ý.
+      if (seed.source !== "youtube" || !seed.youtubeVideoId) return;
       // Đổi hàng đợi TRƯỚC khi gọi API: bài gốc phát ngay, không chờ mạng.
       store.usePlayer.getState().startRadio(seed);
       // Loại CẢ hàng đợi, không chỉ seed. Khi autoplay biến một playlist/album thành
       // radio, `startRadio` giữ nguyên hàng đợi đang nghe (nhánh keep) — xin lô đầu mà
       // chỉ loại seed thì server trả về chính những bài vừa nghe: lô đầu vừa thiếu bài
       // (client lọc trùng bỏ đi) vừa lặp lại bài vừa bỏ qua. Đối xứng với `refillRadio`.
-      const exclude = store.usePlayer.getState().queue.map((t) => t.id);
+      const current = store.usePlayer.getState();
+      const exclude = [
+        ...current.queue.map((t) => t.id),
+        ...(current.radio?.blockedIds ?? []),
+      ];
       try {
-        const tracks = await fetchBatch(seed.id, exclude, FIRST_BATCH);
-        store.usePlayer.getState().appendTracks(tracks);
-        store.usePlayer.getState().setRadioStatus("idle", tracks.length === 0);
+        const page = await fetchBatch({ seedId: seed.id }, exclude, FIRST_BATCH);
+        store.usePlayer.getState().appendTracks(page.tracks);
+        store.usePlayer
+          .getState()
+          .setRadioPage(page.continuation, page.playlistId);
+        store.usePlayer
+          .getState()
+          .setRadioStatus("idle", page.continuation === null);
       } catch (error) {
         failRadio(error);
       }
     },
 
-    async refillRadio(seedId, exclude) {
+    async refillRadio(continuation, exclude) {
       store.usePlayer.getState().setRadioStatus("loading");
       try {
-        const tracks = await fetchBatch(seedId, exclude, REFILL_BATCH);
-        store.usePlayer.getState().appendTracks(tracks);
-        store.usePlayer.getState().setRadioStatus("idle", tracks.length === 0);
+        const page = await fetchBatch(
+          { continuation },
+          exclude,
+          REFILL_BATCH,
+        );
+        store.usePlayer.getState().appendTracks(page.tracks);
+        store.usePlayer
+          .getState()
+          .setRadioPage(page.continuation, page.playlistId);
+        store.usePlayer
+          .getState()
+          .setRadioStatus("idle", page.continuation === null);
       } catch (error) {
-        // Đánh dấu cạn để thôi gọi lại — người dùng bấm Radio lần nữa là thử lại.
         failRadio(error);
       }
     },
@@ -242,6 +274,12 @@ export function createRadioClient(
       const full = last.durationSec ?? FALLBACK_DURATION_SEC;
       const finished = last.time >= FINISH_RATIO * full;
       const byError = last.reason === "error";
+
+      // Một cú bỏ qua chủ động là quyết định của phiên hiện tại. Giữ tombstone cục
+      // bộ để continuation sau không thể đưa bài vừa bỏ trở lại cuối hàng đợi.
+      if (!byError && last.source === "youtube" && !finished) {
+        store.usePlayer.getState().blockRadioTrack(last.id);
+      }
 
       // Chuyển bài có thể đi kèm việc đóng tab; keepalive để request vẫn đi tiếp.
       void post(
@@ -257,31 +295,12 @@ export function createRadioClient(
         true,
       ).catch(() => {});
 
-      // Hai request tách nhau vì hai bảng có vòng đời khác nhau: `play_events` giữ
-      // mãi, `radio_feedback` chỉ để xếp hạng.
-      //
-      // `play_events` vẫn ghi cả lượt hỏng — lịch sử nghe nên phản ánh cả cái đã hỏng,
-      // và nó không quay lại chấm điểm gợi ý. `radio_feedback` thì tuyệt đối không:
-      // một dòng skip ở đây là vĩnh viễn, không TTL, không đường gỡ.
-      if (byError) return;
-      if (last.source !== "youtube" || !last.videoId) return;
-      void post(
-        "/api/radio/feedback",
-        {
-          videoId: last.videoId,
-          artistName: last.artistName,
-          signal: finished ? "finish" : "skip",
-        },
-        true,
-      ).catch(() => {});
+      // Thứ tự radio nay do chính YouTube Mix quyết định. Không gửi skip/finish vào
+      // bộ xếp hạng cũ của Vọng nữa vì nó có thể loại nghệ sĩ vĩnh viễn.
     },
 
-    reportBlocked(videoId, artistName) {
-      void post("/api/radio/feedback", {
-        videoId,
-        artistName,
-        signal: "block",
-      }).catch(() => {});
+    reportBlocked(videoId) {
+      store.usePlayer.getState().blockRadioTrack(`yt:${videoId}`);
     },
   };
 }

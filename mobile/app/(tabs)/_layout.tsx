@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { Tabs } from "expo-router/js-tabs";
-import { StyleSheet } from "react-native";
+import { Image, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, font, layout, spacing } from "@/theme";
 
@@ -61,22 +61,17 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Trang chủ",
+          headerTitle: () => (
+            <Image
+              source={require("../../assets/vong-wordmark.png")}
+              resizeMode="contain"
+              accessibilityLabel="Vọng"
+              style={styles.wordmark}
+            />
+          ),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}
-              size={22}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="tracks"
-        options={{
-          title: "Bài hát",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "musical-notes" : "musical-notes-outline"}
               size={22}
               color={color}
             />
@@ -93,9 +88,23 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="tracks"
+        options={{
+          title: "Thư viện",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "library" : "library-outline"}
+              size={22}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="albums"
         options={{
           title: "Album",
+          href: null,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "disc" : "disc-outline"}
@@ -109,6 +118,7 @@ export default function TabsLayout() {
         name="playlists"
         options={{
           title: "Playlist",
+          href: null,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "list" : "list-outline"}
@@ -124,6 +134,10 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
+  wordmark: {
+    width: 84,
+    height: 38,
+  },
   headerLink: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

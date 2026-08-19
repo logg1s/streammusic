@@ -23,7 +23,6 @@ import type { PlayableTrack } from "./types";
  * Một soak test mô phỏng lại quyết định của app sẽ luôn xanh, kể cả khi app đã chết.
  */
 
-const POOL_SIZE = 48;
 const ARTISTS = 8;
 
 /**
@@ -82,48 +81,13 @@ interface ServerOptions {
 }
 
 /**
- * Server giả, mô hình hoá đúng ba tính chất của server thật khiến bug xảy ra:
- * kho ứng viên hữu hạn và cache theo seed; skip ghi loại trừ VĨNH VIỄN theo tài khoản
- * (không phải theo seed); và hai lần skip là xoá cả nghệ sĩ.
+ * Server giả mô hình hoá YouTube Mix hiện tại: seed tạo trang đầu, rồi mỗi token
+ * continuation mở đúng trang kế tiếp của cùng một danh sách vô hạn.
  */
 function fakeServer(options: ServerOptions = {}) {
   const failOn = new Set(options.failOn ?? []);
-  const excludedVideos = new Set<string>();
-  const excludedArtists = new Set<string>();
-  const skips = new Map<string, number>();
-  const finishes = new Map<string, number>();
   let radioCalls = 0;
   let digs = 0;
-  const seenSeeds = new Set<string>();
-
-  /** Kho của một seed: hữu hạn, tất định, và chồng lấn một phần với seed khác. */
-  const poolFor = (seedId: string): PlayableTrack[] => {
-    let h = 0;
-    for (const ch of seedId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    // Kho của MỘT seed nhỏ (48) — đó là ràng buộc thật đã gây ra bug. Nhưng tổng số
-    // video thì lớn: YouTube không phải là 400 bài, và một vũ trụ giả quá nhỏ sẽ tự
-    // cạn rồi báo là app hỏng. Đường thoát duy nhất khỏi kho 48 bài là xoay seed —
-    // tức là đúng cơ chế đang được kiểm tra.
-    return Array.from({ length: POOL_SIZE }, (_, i) => {
-      const n = (h + i * 7) % 20_000;
-      return track(`v${n}`, `art${n % ARTISTS}`);
-    });
-  };
-
-  const feedback = (videoId: string, artistName: string, signal: string) => {
-    if (signal === "finish") {
-      finishes.set(videoId, (finishes.get(videoId) ?? 0) + 1);
-      finishes.set(artistName, (finishes.get(artistName) ?? 0) + 1);
-      return;
-    }
-    if (signal !== "skip" && signal !== "block") return;
-    const v = (skips.get(videoId) ?? 0) + 1;
-    skips.set(videoId, v);
-    if (v >= 1 && (finishes.get(videoId) ?? 0) === 0) excludedVideos.add(videoId);
-    // Ngưỡng nghệ sĩ đã bị bỏ khỏi server thật; giữ đếm để test thấy được nếu nó
-    // quay lại, nhưng không loại trừ theo nó nữa.
-    skips.set(artistName, (skips.get(artistName) ?? 0) + 1);
-  };
 
   const fetchImpl = async (url: string, init?: { body?: unknown }) => {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
@@ -142,28 +106,21 @@ function fakeServer(options: ServerOptions = {}) {
           json: async () => ({ error: "server toang" }),
         };
       }
-      const seedId = String(body.seedId);
-      if (!seenSeeds.has(seedId)) {
-        seenSeeds.add(seedId);
-        digs += 1; // seed mới = trượt cache = một lần đào InnerTube
-      }
+      const page = body.continuation
+        ? Number(String(body.continuation).replace("mix-page-", ""))
+        : 0;
+      if (body.seedId) digs += 1;
       const exclude = new Set<string>(body.exclude ?? []);
       const limit = Number(body.limit ?? 10);
-      const available = poolFor(seedId).filter(
-        (t) => !exclude.has(t.id) && !excludedArtists.has(t.artistName ?? ""),
-      );
-      // Sàn mềm, giống `buildRadioBatch`: bài từng bị bỏ qua chỉ bị gạt khi còn đủ
-      // bài sạch. Hết bài sạch thì nhận lại, xếp chót — radio phát lại một bài từng
-      // bị skip là hơi dở, radio không phát được gì nữa là hỏng.
-      const clean = available.filter((t) => !excludedVideos.has(t.id));
-      const penalised = available.filter((t) => excludedVideos.has(t.id));
-      const pool = clean.length >= limit * 2 ? clean : [...clean, ...penalised];
-      return ok({ tracks: pool.slice(0, limit) });
-    }
-
-    if (url.endsWith("/api/radio/feedback")) {
-      feedback(String(body.videoId), String(body.artistName), String(body.signal));
-      return ok({});
+      const tracks = Array.from({ length: limit }, (_, index) => {
+        const n = page * 100 + index + 2;
+        return track(`v${n}`, `art${n % ARTISTS}`);
+      }).filter((item) => !exclude.has(item.id));
+      return ok({
+        tracks,
+        continuation: `mix-page-${page + 1}`,
+        playlistId: "RDAMVMv1",
+      });
     }
     return ok({});
   };
@@ -173,8 +130,6 @@ function fakeServer(options: ServerOptions = {}) {
     stats: () => ({
       radioCalls,
       digs,
-      excludedVideos: excludedVideos.size,
-      excludedArtists: excludedArtists.size,
     }),
   };
 }
@@ -283,18 +238,8 @@ describe("soak: phiên nghe dài", () => {
     expect(r.duplicatePairs).toBe(0);
   }, 30_000);
 
-  it("xoay seed không được biến mỗi lần nạp thành một lần trượt cache", async () => {
-    // Đếm số seed KHÁC NHAU trong phiên, tức số lần trượt cache phía server. Trần
-    // ~1 lần mỗi 20 bài. Không có chốt này thì bản sửa cho trần hàng đợi lại đẻ ra
-    // một vấn đề rate-limit mới, trên đúng dải IP vốn đã bị LOGIN_REQUIRED.
-    //
-    // Lưu ý phạm vi: con số này KHÔNG phải số lần gọi YouTube Data API. Trượt cache
-    // đi qua InnerTube (không tốn quota); chỉ khi ứng viên vẫn thiếu mới rơi xuống
-    // Data API, và `search.list` chỉ có 100 lượt/ngày cho TOÀN dự án — không phải mỗi
-    // người 100. Cái phanh cho phần đắt đó là `DATA_API_DAILY_SEED_BUDGET` bên
-    // `src/lib/radio.ts`, không phải test này. Đừng đọc test xanh ở đây thành "quota
-    // an toàn".
+  it("continuation không được đào lại radio từ seed ở mỗi lần nạp", async () => {
     const r = await soak({ advances: 300, skipEvery: 3 });
-    expect(r.digs).toBeLessThanOrEqual(15);
+    expect(r.digs).toBe(1);
   }, 30_000);
 });

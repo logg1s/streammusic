@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { AlbumGrid } from "@/components/library/album-grid";
 import { TrackList } from "@/components/library/track-list";
-import { EmptyState, PageHeader } from "@/components/page-header";
+import { HomeQuickGrid } from "@/components/library/home-quick-grid";
+import { EmptyState } from "@/components/page-header";
 import { YoutubeRows } from "@/components/library/youtube-rows";
 import { requireUserId } from "@/lib/auth";
 import {
@@ -27,11 +28,16 @@ export default async function HomePage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Thư viện"
-        title="Mới thêm"
-        readout={stats.trackCount > 0 ? readout : undefined}
-      />
+      <header className="relative mb-8 overflow-hidden rounded-2xl border border-border bg-[radial-gradient(circle_at_top_left,rgba(255,92,122,0.22),transparent_48%),linear-gradient(135deg,#202128,#111116)] px-5 py-7 sm:px-8 sm:py-9">
+        <p className="eyebrow text-accent-text">Dành cho bạn</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em] sm:text-4xl">
+          Chào bạn
+        </h1>
+        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+          Nhạc từ thư viện của bạn và các danh sách kết hợp do YouTube đề xuất.
+        </p>
+        {stats.trackCount > 0 && <p className="readout mt-4">{readout}</p>}
+      </header>
 
       {stats.trackCount === 0 && played.length === 0 && (
         <EmptyState title="Thư viện còn trống">
@@ -50,16 +56,18 @@ export default async function HomePage() {
       )}
 
       <div className="space-y-12">
+        <HomeQuickGrid tracks={played} />
+
         {played.length > 0 && (
           <section>
-            <h2 className="eyebrow mb-3">Nghe gần đây</h2>
+            <h2 className="mb-3 text-xl font-bold tracking-tight">Nghe gần đây</h2>
             <TrackList tracks={played} radioOnTap />
           </section>
         )}
 
         {recent.length > 0 && (
           <section>
-            <h2 className="eyebrow mb-3">Vừa thêm vào</h2>
+            <h2 className="mb-3 text-xl font-bold tracking-tight">Vừa thêm vào</h2>
             <TrackList tracks={recent} />
           </section>
         )}
