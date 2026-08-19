@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LoginButton } from "@/components/auth/login-button";
 import { auth, signIn } from "@/lib/auth";
@@ -21,12 +22,14 @@ export default async function LoginPage({
   return (
     <main className="grid min-h-dvh place-items-center px-6 py-16">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-2.5">
-          <span className="grid size-7 place-items-center rounded-full border border-accent">
-            <span className="size-2 rounded-full bg-accent" />
-          </span>
-          <span className="text-lg font-semibold tracking-tight">Vọng</span>
-        </div>
+        <Image
+          src="/brand/vong-wordmark.png"
+          alt="Vọng"
+          width={1120}
+          height={300}
+          preload
+          className="h-auto w-40"
+        />
 
         <h1 className="mt-10 text-3xl font-semibold leading-[1.15] tracking-tight sm:text-4xl">
           Nhạc của bạn,

@@ -11,13 +11,29 @@ Produces a signed, production-origin APK that installs on a real device with no 
 
 ```bash
 cd mobile
-npx expo prebuild --platform android    # regenerates android/; config plugins inject everything
+npm run prebuild                        # clean phone regeneration; never reuse a TV prebuild
 cd android
 ./gradlew :app:assembleRelease \
   -PreactNativeArchitectures=arm64-v8a \
   -PVONG_UPLOAD_STORE_PASSWORD="$(cat ../credentials/keystore-pass.txt)"
 # output: android/app/build/outputs/apk/release/app-release.apk (~45 MB)
 ```
+
+For Android TV, start from a separate clean regeneration and build a universal ARM
+APK so 32-bit Sony/Google TV userspace is covered alongside arm64:
+
+```bash
+cd mobile
+npm run prebuild:tv
+cd android
+./gradlew :app:assembleRelease \
+  -PreactNativeArchitectures=armeabi-v7a,arm64-v8a \
+  -PVONG_UPLOAD_STORE_PASSWORD="$(cat ../credentials/keystore-pass.txt)"
+unzip -Z1 app/build/outputs/apk/release/app-release.apk | sort -u | grep '^lib/'
+```
+
+Switching phone/TV targets without the clean scripts is unsupported because the
+generated manifest can retain the previous target's launcher and Leanback features.
 
 ## How signing gets in
 
@@ -29,7 +45,9 @@ cd android
   `android/app/build.gradle` on every prebuild. Never hand-edit
   `android/` — prebuild overwrites it.
 - Alias `vong`, algorithm RSA 2048. Verify a built APK with
-  `apksigner verify --print-certs app-release.apk` (expect `CN=Vong, OU=Vong, O=Vong, L=Hanoi, C=VN`).
+  `apksigner verify --print-certs app-release.apk`. The signer certificate SHA-256
+  digest must be `81:68:DF:6E:CC:7B:9F:9A:E6:3B:F0:A5:EA:27:CF:E2:0B:BC:87:55:D8:9F:54:45:6C:EC:76:9A:2D:24:D3:F1`;
+  checking only `CN=Vong` does not prove update-key continuity.
 
 ## Origin
 

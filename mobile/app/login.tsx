@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -39,7 +40,12 @@ export default function LoginScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.xxl }]}>
       <View style={styles.brand}>
-        <Text style={styles.mark}>Vọng</Text>
+        <Image
+          source={require("../assets/vong-wordmark.png")}
+          resizeMode="contain"
+          accessibilityLabel="Vọng"
+          style={styles.wordmark}
+        />
         <Text style={styles.tagline}>
           Nhạc của bạn trên Drive, Dropbox hay OneDrive — và cả YouTube — trong
           một chỗ.
@@ -89,11 +95,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.md,
   },
-  mark: {
-    color: colors.text,
-    fontSize: 56,
-    fontWeight: "800",
-    letterSpacing: -1,
+  wordmark: {
+    width: 224,
+    height: 60,
   },
   tagline: {
     color: colors.muted,

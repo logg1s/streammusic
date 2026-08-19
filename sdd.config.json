@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "adopted": true,
+  "require_test_traceability": false,
+  "test_roots": [
+    "packages/shared/src",
+    "src",
+    "e2e"
+  ],
+  "verification": {
+    "fast": [],
+    "standard": [
+      ["npm", "run", "verify:local"]
+    ],
+    "critical": []
+  }
+}

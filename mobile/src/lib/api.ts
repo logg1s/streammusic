@@ -3,6 +3,8 @@ import * as Linking from "expo-linking";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useSyncExternalStore } from "react";
+import { VongAudio } from "../../modules/vong-audio";
+import { usePlayer } from "../store/player";
 
 /**
  * Lớp gọi API và giữ phiên đăng nhập của vỏ Expo.
@@ -156,6 +158,72 @@ async function saveSession(next: StoredSession): Promise<void> {
   broadcast();
 }
 
+export interface TvPairingChallenge {
+  deviceCode: string;
+  userCode: string;
+  displayCode: string;
+  verificationUri: string;
+  expiresAt: number;
+  intervalMs: number;
+}
+
+function parseTvPairingChallenge(value: unknown): TvPairingChallenge | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const requiredStrings = [
+    "deviceCode",
+    "userCode",
+    "displayCode",
+    "verificationUri",
+  ] as const;
+  for (const key of requiredStrings) {
+    if (typeof record[key] !== "string" || record[key].length === 0) {
+      return null;
+    }
+  }
+  const expiresAt = record.expiresAt;
+  const intervalMs = record.intervalMs;
+  if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) return null;
+  if (typeof intervalMs !== "number" || !Number.isFinite(intervalMs))
+    return null;
+  return {
+    deviceCode: record.deviceCode as string,
+    userCode: record.userCode as string,
+    displayCode: record.displayCode as string,
+    verificationUri: record.verificationUri as string,
+    expiresAt,
+    intervalMs,
+  };
+}
+
+/** Bắt đầu luồng đăng nhập cho thiết bị không có browser/nhập liệu thuận tiện. */
+export async function startTvPairing(): Promise<TvPairingChallenge> {
+  const response = await fetch(`${ORIGIN}/api/native/tv/start`, {
+    method: "POST",
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  const challenge = parseTvPairingChallenge(await response.json());
+  if (!challenge) throw new Error("Máy chủ trả mã ghép nối TV không hợp lệ.");
+  return challenge;
+}
+
+/** Hỏi trạng thái mã; khi được duyệt, lưu phiên và đánh thức cổng đăng nhập của app. */
+export async function pollTvPairing(deviceCode: string): Promise<boolean> {
+  const response = await fetch(`${ORIGIN}/api/native/tv/token`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceCode }),
+  });
+  if (response.status === 202) return false;
+  if (!response.ok) throw new Error(await errorMessage(response));
+
+  const body: unknown = await response.json();
+  const minted = parseSession(body);
+  if (!minted) throw new Error("Máy chủ trả phiên TV không hợp lệ.");
+  await saveSession(minted);
+  return true;
+}
+
 /**
  * Đổi mã trao tay đã được runner E2E phát sẵn. Hàm vẫn dùng đúng endpoint một-lần của
  * luồng đăng nhập thật; chỉ màn `auth` trong bundle E2E mới gọi thẳng nó, nên bản phát
@@ -189,7 +257,9 @@ async function clearSession(): Promise<void> {
  * Xin token mới bằng chính token cũ. Gọi `fetch` trần chứ không `apiFetch`: `apiFetch`
  * lại đi hỏi token nên sẽ quay vòng vô tận.
  */
-async function requestRefresh(current: StoredSession): Promise<StoredSession | null> {
+async function requestRefresh(
+  current: StoredSession,
+): Promise<StoredSession | null> {
   let response: Response;
   try {
     response = await fetch(`${ORIGIN}/api/native/session-token`, {
@@ -288,7 +358,11 @@ export async function apiFetch(
   const headers = new Headers(init.headers);
   if (token) headers.set("authorization", `Bearer ${token}`);
   // Chỉ khai kiểu nội dung khi thật sự có body: GET kèm `content-type` làm hỏng cache.
-  if (init.body !== undefined && init.body !== null && !headers.has("content-type")) {
+  if (
+    init.body !== undefined &&
+    init.body !== null &&
+    !headers.has("content-type")
+  ) {
     headers.set("content-type", "application/json");
   }
 
@@ -342,6 +416,11 @@ export async function signIn(): Promise<boolean> {
 }
 
 export async function signOut(): Promise<void> {
+  // Native Media3 owns a queue separate from Zustand and embeds per-item auth
+  // headers. Clear it before dropping the session so logout cannot leave audio or
+  // a bearer-backed next item alive in the service/MediaSession.
+  await VongAudio.setQueue({ items: [], startIndex: 0, positionSec: 0 });
+  usePlayer.getState().clearQueue();
   await clearSession();
 }
 

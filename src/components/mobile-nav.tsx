@@ -25,10 +25,10 @@ export function MobileHeader() {
         <Image
           src="/brand/vong-wordmark.png"
           alt="Vọng"
-          width={74}
-          height={33}
-          priority
-          className="h-auto w-[74px]"
+          width={1120}
+          height={300}
+          preload
+          className="h-auto w-[90px]"
         />
       </Link>
       <div className="flex items-center gap-1">

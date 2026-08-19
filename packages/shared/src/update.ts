@@ -3,6 +3,7 @@ export interface LatestRelease {
   version: string;
   pageUrl: string;
   androidUrl: string | null;
+  androidTvUrl: string | null;
   windowsUrl: string | null;
 }
 

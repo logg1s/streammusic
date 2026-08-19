@@ -1,9 +1,9 @@
-# Release: gắn tag v* là build APK Android (ký thật) + installer Windows (NSIS)
-# rồi đính cả hai vào GitHub Release của tag đó.
+# A v* tag builds signed Android phone/TV APKs and the Windows NSIS installer,
+# then attaches all artifacts to the same GitHub Release.
 #
-# Secrets cần có (đặt một lần bằng `gh secret set`):
-#   ANDROID_KEYSTORE_BASE64     — mobile/credentials/vong-release.jks mã hoá base64
-#   VONG_UPLOAD_STORE_PASSWORD  — mật khẩu keystore
+# Required repository secrets:
+#   ANDROID_KEYSTORE_BASE64     — base64-encoded mobile/credentials/vong-release.jks
+#   VONG_UPLOAD_STORE_PASSWORD  — release keystore password
 name: Release
 
 on:
@@ -27,25 +27,83 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: npm ci
-      - name: Giải mã keystore
+      - name: Decode keystore
         run: |
           mkdir -p mobile/credentials
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > mobile/credentials/vong-release.jks
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       - name: Prebuild android/
-        run: npx expo prebuild --platform android
+        run: npm run prebuild
         working-directory: mobile
       - name: Build APK release
         run: ./gradlew :app:assembleRelease --console=plain -PreactNativeArchitectures=arm64-v8a "-PVONG_UPLOAD_STORE_PASSWORD=$VONG_UPLOAD_STORE_PASSWORD"
         working-directory: mobile/android
         env:
           VONG_UPLOAD_STORE_PASSWORD: ${{ secrets.VONG_UPLOAD_STORE_PASSWORD }}
-      - name: Đổi tên theo tag
-        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk "Vong_${GITHUB_REF_NAME#v}_arm64.apk"
+      - name: Name and verify phone artifact
+        run: |
+          set -o pipefail
+          APK="Vong_${GITHUB_REF_NAME#v}_arm64.apk"
+          cp mobile/android/app/build/outputs/apk/release/app-release.apk "$APK"
+          APKSIGNER="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee phone-signature.txt
+          EXPECTED_CERT_SHA256="8168DF6ECC7B9F9AE63BF0A5EA27CFE20BBC8755D89F54456CEC769A2D24D3F1"
+          ACTUAL_CERT_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' phone-signature.txt | tr '[:lower:]' '[:upper:]' | tr -d ':')"
+          test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
+          sha256sum "$APK" > "$APK.sha256"
       - uses: softprops/action-gh-release@v2
         with:
-          files: Vong_*.apk
+          files: |
+            Vong_*_arm64.apk
+            Vong_*_arm64.apk.sha256
+
+  android-tv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Decode keystore
+        run: |
+          mkdir -p mobile/credentials
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > mobile/credentials/vong-release.jks
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - name: Prebuild Android TV
+        run: npm run prebuild:tv
+        working-directory: mobile
+      - name: Build signed universal ARM TV APK
+        run: ./gradlew :app:assembleRelease --console=plain -PreactNativeArchitectures=armeabi-v7a,arm64-v8a "-PVONG_UPLOAD_STORE_PASSWORD=$VONG_UPLOAD_STORE_PASSWORD"
+        working-directory: mobile/android
+        env:
+          VONG_UPLOAD_STORE_PASSWORD: ${{ secrets.VONG_UPLOAD_STORE_PASSWORD }}
+      - name: Name and verify TV artifact
+        run: |
+          set -o pipefail
+          APK="Vong_${GITHUB_REF_NAME#v}_android-tv_universal.apk"
+          cp mobile/android/app/build/outputs/apk/release/app-release.apk "$APK"
+          ACTUAL_ABIS="$(unzip -Z1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)"
+          EXPECTED_ABIS="$(printf 'arm64-v8a\narmeabi-v7a')"
+          test "$ACTUAL_ABIS" = "$EXPECTED_ABIS"
+          APKSIGNER="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee tv-signature.txt
+          EXPECTED_CERT_SHA256="8168DF6ECC7B9F9AE63BF0A5EA27CFE20BBC8755D89F54456CEC769A2D24D3F1"
+          ACTUAL_CERT_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' tv-signature.txt | tr '[:lower:]' '[:upper:]' | tr -d ':')"
+          test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
+          sha256sum "$APK" > "$APK.sha256"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Vong_*_android-tv_universal.apk
+            Vong_*_android-tv_universal.apk.sha256
 
   windows:
     runs-on: windows-latest

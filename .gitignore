@@ -43,6 +43,11 @@ next-env.d.ts
 .vercel
 .env*
 
+# Python tooling caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # ảnh chụp màn hình do công cụ kiểm thử sinh ra
 .playwright-mcp/
 /*.png
@@ -61,6 +66,7 @@ mobile/*.jks
 
 # anh chup man hinh may ao
 .shots/
+/artifacts/
 mobile/credentials/
 
 # release binaries — these belong on GitHub Releases, not in git
@@ -70,3 +76,6 @@ mobile/credentials/
 *.msi
 *.dmg
 *.AppImage
+
+# Repository-native SDD raw evidence (summaries stay tracked)
+specs/changes/*/evidence/raw/

@@ -47,10 +47,10 @@ export function AppSidebar({ userName }: { userName: string | null }) {
         <Image
           src="/brand/vong-wordmark.png"
           alt="Vọng"
-          width={96}
-          height={43}
-          priority
-          className="h-auto w-24"
+          width={1120}
+          height={300}
+          preload
+          className="h-auto w-28"
         />
       </Link>
 

@@ -1,5 +1,11 @@
 import { useEffect } from "react";
-import { ActivityIndicator, StatusBar, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  View,
+} from "react-native";
 import * as Linking from "expo-linking";
 import {
   DarkTheme,
@@ -19,6 +25,7 @@ import { PlayerBar } from "@/components/player/player-bar";
 import { UpdateBanner } from "@/components/update-banner";
 import { adoptE2EHandoff, useSession } from "@/lib/api";
 import { colors, font, layout } from "@/theme";
+import { TvRoot } from "@/tv/tv-root";
 
 /**
  * Chủ đề của navigator.
@@ -51,9 +58,9 @@ export default function RootLayout() {
         <PlaybackEngine />
         <AnalyticsProvider />
         <E2EHandoffListener />
-        <UpdateBanner />
+        {Platform.isTV ? null : <UpdateBanner />}
         <FavoritesProvider>
-          <SessionGate />
+          {Platform.isTV ? <TvRoot /> : <SessionGate />}
         </FavoritesProvider>
       </ThemeProvider>
     </SafeAreaProvider>
@@ -68,12 +75,18 @@ function E2EHandoffListener() {
     const adopt = (url: string | null) => {
       if (!url) return;
       const code = Linking.parse(url).queryParams?.code;
-      if (typeof code !== "string" || code.length === 0 || seen.has(code)) return;
+      if (typeof code !== "string" || code.length === 0 || seen.has(code))
+        return;
       seen.add(code);
-      void adoptE2EHandoff(code);
+      void adoptE2EHandoff(code).catch(() => {
+        // Mã E2E là một-lần; reload có thể giao lại deep link đã dùng. Bỏ qua ở
+        // listener thử nghiệm để lỗi cũ không che UI đang được kiểm chứng.
+      });
     };
     void Linking.getInitialURL().then(adopt);
-    const subscription = Linking.addEventListener("url", ({ url }) => adopt(url));
+    const subscription = Linking.addEventListener("url", ({ url }) =>
+      adopt(url),
+    );
     return () => subscription.remove();
   }, []);
   return null;

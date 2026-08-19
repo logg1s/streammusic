@@ -120,8 +120,9 @@ Two design decisions worth knowing:
 - **The `<audio>` pool lives in the layout** (`src/app/(app)/layout.tsx`), not
   in a page. App Router keeps layouts mounted across navigation, so music
   never cuts out when you browse.
-- **The native shells don't re-implement the UI.** They load the deployed web
-  app and replace only the audio path:
+- **The Windows shell reuses the deployed web UI; Android has its own Expo Router
+  UI.** Both native shells reuse shared queue/resolver contracts and replace the
+  browser audio path with an operating-system player:
 
   | | Playback | Controls outside the app |
   | --- | --- | --- |
@@ -183,9 +184,9 @@ YouTube sits next to your storage as a full music source:
 
 - **Search any song** — the Search page shows an "On YouTube" section below
   library results; every row plays instantly, queues, or joins a playlist.
-- **Radio that keeps going** — hit **Radio** on any track and the queue extends
-  itself with similar songs, sourced from YouTube Music's automix and re-ranked
-  by your in-app listening history.
+- **Radio that keeps going** — hit **Radio** on a YouTube track and the queue
+  extends itself in YouTube Music's up-next order, filtering tracks already
+  queued or blocked in the current session.
 - **Mixed playlists** — library tracks and YouTube tracks in one list.
 - **Personalised home** — recently played plus YouTube Music suggestion rows.
 
@@ -198,11 +199,13 @@ IPs (`LOGIN_REQUIRED`, measured 2026-08, 3/3 videos) and Vercel's AUP forbids
 media proxying anyway. The price: an iframe can't play with the screen locked.
 
 The **native shells** resolve the audio URL on-device (residential IP — works)
-and decode it themselves. One hard-won constraint applies to both:
-**googlevideo returns `403` unless every request carries a `Range` header
-spanning ≤ 1 MiB.** Stock players (ExoPlayer, AVURLAsset) omit `Range` on
-their first request, so both shells implement custom readers that slice
-requests into ≤ 1 MiB chunks.
+and decode it themselves. One hard-won constraint applies to both: every byte
+request to googlevideo must carry a `Range` header. Measurements in the current
+implementation show an un-ranged request being throttled to about 32 KiB/s,
+while `Range: bytes=0-` receives a normal `206` response at full speed. The
+Windows and Android readers therefore inject an open-ended
+`Range: bytes=N-` on every request; a downstream HTTP stack may tighten
+that range without violating the contract.
 
 Server-side InnerTube (`src/lib/youtube/resolve.ts`) is only used for
 metadata: search, automix, suggestions.
@@ -267,17 +270,34 @@ Release build — signed, production origin, installs on a real device without
 Metro:
 
 ```bash
-cd mobile && npx expo prebuild --platform android   # generates android/, signing auto-injected
+cd mobile && npm run prebuild                       # clean phone android/, signing auto-injected
 cd android && ./gradlew :app:assembleRelease \
   -PreactNativeArchitectures=arm64-v8a \
   -PVONG_UPLOAD_STORE_PASSWORD="$(cat ../credentials/keystore-pass.txt)"
 # → android/app/build/outputs/apk/release/app-release.apk
 ```
 
+Android TV is generated separately and must not reuse the phone `android/`
+directory. The release APK deliberately contains both ARM ABIs:
+
+```bash
+cd mobile && npm run prebuild:tv
+cd android && ./gradlew :app:assembleRelease \
+  -PreactNativeArchitectures=armeabi-v7a,arm64-v8a \
+  -PVONG_UPLOAD_STORE_PASSWORD="$(cat ../credentials/keystore-pass.txt)"
+# → android/app/build/outputs/apk/release/app-release.apk
+```
+
+Sony does not publish the Android application ABI for the BRAVIA KD-55X80J,
+and a 64-bit-capable SoC does not prove that its Android userspace is arm64.
+The universal TV artifact therefore covers both `armeabi-v7a` and `arm64-v8a`.
+On a physical TV, verify the exact firmware ABI with
+`adb shell getprop ro.product.cpu.abilist`.
+
 The keystore lives at `mobile/credentials/vong-release.jks` (gitignored — **do
 not lose it**, or installed apps can never be updated). On Windows, long paths
-break the native build: create a junction with `mklink /J C:\vb <repo>` and
-build from `C:\vb\mobile\android`.
+require Windows long-path support plus Ninja 1.11 or newer; a directory junction
+alone is insufficient because Gradle resolves the canonical source path.
 
 ### Library scanning internals
 

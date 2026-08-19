@@ -15,9 +15,11 @@ src-tauri/            Windows shell — Rust, decodes audio itself (rodio + symp
 mobile/               Expo app (Android) + the `vong-audio` native module (androidx.media3)
 ```
 
-The Windows and Android apps load the *same* deployed web UI and swap out only
-the playback layer for the OS's own player. If you're changing UI, you're
-almost certainly changing `src/`, not the native shells.
+The Windows app loads the deployed web UI and swaps only the playback layer for
+the OS player. Android has a separate Expo Router UI under `mobile/app/` and
+`mobile/src/`, while sharing queue/resolver contracts from `packages/shared/`.
+Web/Windows UI changes usually belong in `src/`; Android UI changes belong in
+`mobile/`.
 
 `mobile/` has its own `tsconfig.json` and ESLint config, separate from the
 root. **The root `tsc --noEmit` excludes both `mobile/` and `src-tauri/`** —

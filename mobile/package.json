@@ -7,12 +7,15 @@
     "start": "expo start --dev-client",
     "android": "expo run:android",
     "prebuild": "expo prebuild --platform android --clean",
+    "prebuild:tv": "node scripts/run-tv.mjs prebuild --platform android --clean",
+    "android:tv": "node scripts/run-tv.mjs run:android",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-tvos/virtualized-lists": "^0.86.2-0",
     "@vong/shared": "*",
     "expo": "57.0.13",
     "expo-constants": "~57.0.11",
@@ -26,7 +29,7 @@
     "expo-system-ui": "^57.0.2",
     "expo-web-browser": "~57.0.2",
     "react": "19.2.8",
-    "react-native": "0.86.2",
+    "react-native": "npm:react-native-tvos@^0.86.2-0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -34,9 +37,17 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@react-native-tvos/config-tv": "^0.1.6",
     "@types/react": "^19",
     "eslint": "^9.39.5",
     "eslint-config-expo": "^57.0.1",
     "typescript": "^5"
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "react-native"
+      ]
+    }
   }
 }
