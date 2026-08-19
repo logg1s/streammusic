@@ -1,7 +1,7 @@
 # `CHG-20260819-2183b483-android-tv-release`
 
 Change-ID: `CHG-20260819-2183b483`
-Status: active
+Status: verified
 Lane: critical
 Owner: `Vong maintainers`
 Decision-Owner: `User / Vong maintainer`
@@ -30,7 +30,7 @@ local browser would not be a usable product.
 - [x] `AC-CHG-20260819-2183b483-02`: Given an Android TV device with only a D-pad and Select/Back/media keys, when the listener launches Vong, then every primary browse and playback action is reachable and has an obvious focused state without touch input.
 - [x] `AC-CHG-20260819-2183b483-03`: Given a signed-out TV listener, when they pair on a separate browser-capable device, then the TV receives one scoped native bearer session without exposing the device polling credential; expired, unknown, replayed, or unapproved attempts issue no session.
 - [x] `AC-CHG-20260819-2183b483-04`: Given library or YouTube playback on TV, when playback starts, seeks, advances, backgrounds, or receives a media key, then Media3 remains the only audible engine, library requests retain the Vong bearer, and googlevideo requests retain a Range header without the bearer.
-- [ ] `AC-CHG-20260819-2183b483-05`: Given the release commit passes local and emulator gates, when the GitHub release is published, then versioned phone and TV APK assets are attached and byte-verifiable from the release page.
+- [x] `AC-CHG-20260819-2183b483-05`: Given the release commit passes local and emulator gates, when the GitHub release is published, then versioned phone and TV APK assets are attached and byte-verifiable from the release page.
 - [x] `AC-CHG-20260819-2183b483-06`: Given playback has loaded bearer-backed Android items, when the listener signs out, then native playback, MediaSession queue, shared queue, and persisted session are cleared in that order.
 
 ## Impact
@@ -57,8 +57,8 @@ local browser would not be a usable product.
 - [x] Apply and verify the shared brand assets before behavior changes.
 - [x] Implement and test TV pairing, remote-first UI, and TV build configuration.
 - [x] Run Critical local verification and Android TV emulator smoke tests.
-- [ ] Verify the signed phone and universal-ARM TV artifacts produced from the release tag.
-- [ ] Publish and verify the authorised GitHub release artifacts.
+- [x] Verify the signed phone and universal-ARM TV artifacts produced from the release tag.
+- [x] Publish and verify the authorised GitHub release artifacts.
 
 ## Verification Evidence
 
@@ -68,9 +68,9 @@ local browser would not be a usable product.
 | Pairing contract tests | pass | `src/lib/tv-pairing.test.ts`: start/approve/consume, unapproved, replay, and expiry cases pass; live local start route returned a challenge |
 | `python scripts/verify.py` | pass | SDD check plus the full Critical local gate passed on 2026-08-19. |
 | `npm run verify:local` | pass | 132 tests, web/shared/mobile typecheck and lint, Next production build, and Rust clippy passed. |
-| Android phone signed release smoke test | pending | Not run yet |
-| Android TV signed release D-pad/playback smoke test | partial | Debug-signed TV build installed on Android TV API 36; Leanback activity resolved; D-pad traversed all primary sections and track cards; Media3/MediaSession fixture playback and remote pause/resume passed. Logout returned to pairing and changed MediaSession to `NONE` with empty metadata/queue. Release ARM artifact build remains pending. |
-| GitHub release asset verification | pending | Not run yet |
+| Android phone signed release verification | pass | `Vong_0.8.0_arm64.apk` built from tag `v0.8.0`; APK Signature Scheme v2 verified against pinned signer SHA-256 `8168DF6ECC7B9F9AE63BF0A5EA27CFE20BBC8755D89F54456CEC769A2D24D3F1`; exact ABI set is `arm64-v8a`; artifact SHA-256 is `030336eb7f010033585b61cc65812c5c584f58ea59e451bf9dd8d72d86ebcc2a`. |
+| Android TV signed release D-pad/playback smoke test | pass | Debug TV coverage exercised all primary D-pad and MediaSession paths. The signed release variant was additionally built for the emulator's `x86_64` ABI, signed with the pinned release certificate, installed on Android TV API 36, resolved through the Leanback launcher, rendered the production pairing challenge, stayed foreground, and emitted no fatal runtime exception. The published ARM artifact passed exact ABI and manifest gates. |
+| GitHub release asset verification | pass | GitHub Release `v0.8.0` publishes both APKs and adjacent checksum files. Assets downloaded back from GitHub matched their checksum files and pinned signer. Universal TV SHA-256 is `6f4325da46b61db57aa41744b1f5bdddd568e7e40bc23e0e28c5cbcd9ba57f89`, exact ABI set is `armeabi-v7a,arm64-v8a`, Leanback launcher is present, and touchscreen is optional. Production `/api/releases/latest` returns both 0.8.0 Android URLs. |
 
 ## Open Questions
 
@@ -79,4 +79,4 @@ local browser would not be a usable product.
 ## Review
 
 - Decision: approved by the user / decision owner on 2026-08-19
-- Fresh-context review: approved on 2026-08-19; no code blocker remains. Signed artifact, downloaded checksum, and final release smoke checks remain post-tag gates.
+- Fresh-context review: approved on 2026-08-19; no code blocker remains. All signed artifact, downloaded checksum, release metadata, and final TV release-variant smoke gates passed.
