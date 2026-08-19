@@ -136,6 +136,33 @@ describe("handleEnded", () => {
   });
 });
 
+describe("seek", () => {
+  it("chặn tick cũ của engine làm thanh tua nhảy ngược", () => {
+    const sought: number[] = [];
+    store.registerSink("youtube", { seek: (seconds) => sought.push(seconds) });
+    get().playQueue([a], 0);
+    store.usePlayer.setState({ duration: 200, currentTime: 20 });
+
+    get().seek(120);
+    get().syncTime(21, 200); // tick cũ đến sau lệnh seek
+
+    expect(sought).toEqual([120]);
+    expect(get().currentTime).toBe(120);
+
+    get().syncTime(120.4, 200); // engine xác nhận đã tới đích
+    expect(get().currentTime).toBe(120.4);
+  });
+
+  it("kẹp đích seek vào thời lượng và bỏ giá trị không hợp lệ", () => {
+    get().playQueue([a], 0);
+    store.usePlayer.setState({ duration: 200, currentTime: 10 });
+    get().seek(999);
+    expect(get().currentTime).toBe(200);
+    get().seek(Number.NaN);
+    expect(get().currentTime).toBe(200);
+  });
+});
+
 describe("shuffle", () => {
   it("bật xáo giữ nguyên bài đang nghe ở đầu order", () => {
     get().playQueue([a, b, c], 1); // đang nghe b (queue index 1)
@@ -200,6 +227,16 @@ describe("removeAt / moveToNext", () => {
     expect(get().order).toEqual([0, 2, 1, 3]);
     expect(store.peekNextTrack()?.id).toBe("c");
   });
+
+  it("bài đã bỏ khỏi radio không thể được append trở lại", () => {
+    get().startRadio(a);
+    get().appendTracks([b, c]);
+    get().removeAt(1); // bỏ b khỏi danh sách phát
+
+    expect(get().radio?.blockedIds).toEqual(["b"]);
+    get().appendTracks([b, d]); // continuation sau trả lại b
+    expect(get().queue.map((item) => item.id)).toEqual(["a", "c", "d"]);
+  });
 });
 
 describe("radio", () => {
@@ -209,6 +246,8 @@ describe("radio", () => {
     const s = get();
     expect(s.queue.map((t) => t.id)).toEqual(["c"]);
     expect(s.radio?.seedId).toBe("c");
+    expect(s.radio?.blockedIds).toEqual([]);
+    expect(s.radio?.continuation).toBeNull();
     expect(s.isPlaying).toBe(true);
   });
 
@@ -232,8 +271,8 @@ describe("radio", () => {
 });
 
 describe("autoplay flag", () => {
-  it("mặc định bật", () => {
-    expect(get().autoplay).toBe(true);
+  it("mặc định tắt để hàng đợi thư viện dừng ở cuối", () => {
+    expect(get().autoplay).toBe(false);
   });
 
   it("setAutoplay đổi cờ và được lưu ra storage", async () => {

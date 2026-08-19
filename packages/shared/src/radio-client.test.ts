@@ -28,6 +28,15 @@ function track(id: string): PlayableTrack {
   };
 }
 
+function libraryTrack(id: string): PlayableTrack {
+  return {
+    ...track(id),
+    source: "library",
+    youtubeVideoId: null,
+    provider: "google_drive",
+  };
+}
+
 /** State tối thiểu để thử `autoplaySeed` — hàm chỉ đọc vài trường. */
 function state(over: Partial<PlayerState>): PlayerState {
   const queue = over.queue ?? [track("a"), track("b"), track("c")];
@@ -59,10 +68,20 @@ describe("autoplaySeed", () => {
     expect(autoplaySeed(state({ position: 2, autoplay: false }))).toBeNull();
   });
 
+  it("null với bài thư viện dù cờ autoplay cũ vẫn đang bật", () => {
+    const queue = [libraryTrack("drive-a")];
+    expect(
+      autoplaySeed(state({ queue, order: [0], position: 0, autoplay: true })),
+    ).toBeNull();
+  });
+
   it("null khi đã có radio chạy (RadioController tự nạp thêm)", () => {
     const radio = {
       seedId: "a",
       seedLabel: "A",
+      playlistId: null,
+      continuation: "next",
+      blockedIds: [],
       status: "idle" as const,
       exhausted: false,
       message: null,
@@ -144,5 +163,58 @@ describe("startRadioFor", () => {
       "x",
       "y",
     ]);
+  });
+
+  it("không gọi radio cho bài thư viện", async () => {
+    const store = createPlayerStore({ storage: memoryStorage(), name: "library" });
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ tracks: [] }),
+        text: async () => "",
+      };
+    };
+    const client = createRadioClient(store, { fetchImpl });
+
+    await client.startRadioFor(libraryTrack("drive-a"));
+
+    expect(calls).toBe(0);
+    expect(store.usePlayer.getState().radio).toBeNull();
+  });
+
+  it("nạp tiếp bằng continuation YouTube và lưu token mới", async () => {
+    const store = createPlayerStore({ storage: memoryStorage(), name: "continuation" });
+    store.usePlayer.getState().startRadio(track("seed"));
+    let sent: Record<string, unknown> = {};
+    const fetchImpl: FetchLike = async (_url, init) => {
+      sent = JSON.parse(init?.body ?? "{}");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          tracks: [track("next")],
+          continuation: "token-2",
+          playlistId: "RDAMVMseed",
+        }),
+        text: async () => "",
+      };
+    };
+    const client = createRadioClient(store, { fetchImpl });
+
+    await client.refillRadio("token-1", ["seed", "removed"]);
+
+    expect(sent).toMatchObject({
+      continuation: "token-1",
+      exclude: ["seed", "removed"],
+    });
+    expect(store.usePlayer.getState().queue.map((item) => item.id)).toEqual([
+      "seed",
+      "next",
+    ]);
+    expect(store.usePlayer.getState().radio?.continuation).toBe("token-2");
+    expect(store.usePlayer.getState().radio?.playlistId).toBe("RDAMVMseed");
   });
 });

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
 import type { PlayableTrack } from "@vong/shared";
 import {
   EmptyNote,
@@ -22,6 +24,7 @@ import { colors, font, spacing } from "@/theme";
  * vùng chữ cái mình cần, còn cuộn vô hạn thì phải nạp tuần tự từ đầu.
  */
 export default function TracksScreen() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const { data, error, loading, reload } = useApi<TracksPage>(
     `/api/library/tracks?page=${page}`,
@@ -69,9 +72,28 @@ export default function TracksScreen() {
           index,
         })}
         ListHeaderComponent={
-          <Readout
-            text={`${formatLibraryStats(data.stats)}  ·  trang ${data.page}/${data.totalPages}`}
-          />
+          <>
+            <View style={styles.shortcuts}>
+              <LibraryShortcut
+                icon="disc-outline"
+                label="Album"
+                onPress={() => router.push("/albums")}
+              />
+              <LibraryShortcut
+                icon="list-outline"
+                label="Playlist"
+                onPress={() => router.push("/playlists")}
+              />
+              <LibraryShortcut
+                icon="heart-outline"
+                label="Yêu thích"
+                onPress={() => router.push("/favorites" as Href)}
+              />
+            </View>
+            <Readout
+              text={`${formatLibraryStats(data.stats)}  ·  trang ${data.page}/${data.totalPages}`}
+            />
+          </>
         }
         ListEmptyComponent={
           <EmptyNote
@@ -103,6 +125,28 @@ export default function TracksScreen() {
   );
 }
 
+function LibraryShortcut({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.shortcut, pressed && styles.pressed]}
+    >
+      <Ionicons name={icon} size={20} color={colors.accentText} />
+      <Text style={styles.shortcutText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function PagerButton({
   label,
   disabled,
@@ -127,6 +171,26 @@ function PagerButton({
 }
 
 const styles = StyleSheet.create({
+  shortcuts: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  shortcut: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+  },
+  shortcutText: {
+    color: colors.text,
+    fontSize: font.xs,
+    fontWeight: "700",
+  },
   pager: {
     flexDirection: "row",
     alignItems: "center",

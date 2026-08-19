@@ -1,5 +1,4 @@
 import {
-  MAX_RESEED_ATTEMPTS,
   REFILL_THRESHOLD,
   autoplaySeed,
   radioRetryDelayMs,
@@ -72,14 +71,13 @@ export function createRadioEngine(
   let starting = false;
   let failures = 0;
   let retryAt = 0;
-  let reseeds = 0;
+  const reseeds = 0;
   let last: PlayedTrack | null = null;
 
-  const refill = async (seedId: string, exclude: string[]) => {
+  const refill = async (continuation: string, exclude: string[]) => {
     refilling = true;
-    const before = store.usePlayer.getState().queue.length;
     try {
-      await client.refillRadio(seedId, exclude);
+      await client.refillRadio(continuation, exclude);
       const state = store.usePlayer.getState();
 
       if (state.radio?.status === "error") {
@@ -89,30 +87,6 @@ export function createRadioEngine(
       }
       failures = 0;
       retryAt = 0;
-
-      // Lô về ngắn = kho ứng viên của seed này đang cạn. Xoay seed sang bài đang phát
-      // TRƯỚC khi cạn hẳn. Kho phía server được cache theo seed và hữu hạn (~100 id),
-      // nên nạp mãi bằng seed gốc là một phiên nghe có trần cứng — đó là "nghe chục
-      // bài rồi không next được nữa".
-      //
-      // Nhưng chỉ xoay khi lô về ngắn, không xoay mỗi lần: mỗi seed mới là một lần
-      // trượt cache, tức một lần đào InnerTube phía server. Xoay mỗi lần nạp biến 1
-      // lần đào/phiên thành ~15, trên đúng dải IP vốn đã bị LOGIN_REQUIRED.
-      const gained = store.usePlayer.getState().queue.length - before;
-
-      // Trần đếm số lần gieo lại LIÊN TIẾP MÀ KHÔNG RA BÀI NÀO, không phải tổng số
-      // lần gieo lại trong phiên. Đếm tổng thì một phiên đủ dài chắc chắn chạm trần
-      // rồi chết — chỉ là chết muộn hơn, ở bài 243 thay vì bài 160, mà vẫn chết.
-      // Cái cần chặn là vòng lặp rỗng vô ích, không phải việc xoay seed nhiều lần:
-      // xoay được bài mới nghĩa là nó đang làm đúng việc của nó.
-      if (gained > 0) reseeds = 0;
-
-      if (gained > REFILL_THRESHOLD) return;
-      const current = state.queue[state.order[state.position]] ?? null;
-      if (current && current.id !== seedId && reseeds < MAX_RESEED_ATTEMPTS) {
-        if (gained === 0) reseeds += 1;
-        store.usePlayer.getState().rotateRadioSeed(current);
-      }
     } finally {
       refilling = false;
     }
@@ -131,8 +105,11 @@ export function createRadioEngine(
       const track = state.queue[state.order[state.position]] ?? null;
 
       if (last?.id !== track?.id) {
-        if (last) client.reportPlayed(last);
+        const finished = last;
+        // Đổi snapshot TRƯỚC khi report: reportPlayed có thể ghi tombstone vào store,
+        // phát state đồng bộ và gọi lại handle ngay trong cùng call stack.
         last = track ? snapshot(track) : null;
+        if (finished) client.reportPlayed(finished);
       } else if (last) {
         last.time = state.currentTime;
       }
@@ -142,27 +119,24 @@ export function createRadioEngine(
 
       if (
         radio &&
+        radio.continuation &&
         !radio.exhausted &&
         radio.status !== "loading" &&
         ready &&
         order.length - 1 - position <= REFILL_THRESHOLD
       ) {
         void refill(
-          radio.seedId,
-          queue.map((t) => t.id),
+          radio.continuation,
+          [...queue.map((t) => t.id), ...radio.blockedIds],
         );
         return;
       }
 
-      // Autoplay: hàng đợi thường sắp hết → biến nó thành radio. Cũng là đường thoát
-      // khi radio đã cạn — nhưng có trần, vì không có trần thì cạn → gieo lại → lô
-      // rỗng → cạn lặp vô hạn, mỗi vòng một lần đào server.
+      // Chỉ hàng đợi YouTube mới có thể mở radio. Thư viện/Drive luôn dừng ở cuối.
       if (!ready) return;
-      if (state.radio?.exhausted && reseeds >= MAX_RESEED_ATTEMPTS) return;
 
       const seed = autoplaySeed(state);
       if (!seed) return;
-      if (state.radio?.exhausted) reseeds += 1;
 
       options.onAutoplayTrigger?.();
       starting = true;

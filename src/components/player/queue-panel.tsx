@@ -5,7 +5,6 @@ import Link from "next/link";
 import { ChevronsUp, X } from "lucide-react";
 import { Cover } from "@/components/library/cover";
 import { Equalizer } from "@/components/player/equalizer";
-import { useRadioConfig } from "@/components/player/radio-context";
 import { cn, formatDuration } from "@/lib/utils";
 import { usePlayer } from "@/store/player";
 
@@ -30,11 +29,8 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
   const playTrackAt = usePlayer((s) => s.playTrackAt);
   const radio = usePlayer((s) => s.radio);
   const stopRadio = usePlayer((s) => s.stopRadio);
-  const autoplay = usePlayer((s) => s.autoplay);
-  const setAutoplay = usePlayer((s) => s.setAutoplay);
   const removeAt = usePlayer((s) => s.removeAt);
   const moveToNext = usePlayer((s) => s.moveToNext);
-  const personalized = useRadioConfig().personalized;
 
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -126,20 +122,7 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
                   </p>
                   {trangThaiRadio && <p className="readout mt-0.5">{trangThaiRadio}</p>}
                   <p className="readout mt-0.5">
-                    {personalized ? (
-                      "Theo gu YouTube của bạn"
-                    ) : (
-                      <>
-                        Chưa nối YouTube — gợi ý chưa cá nhân hoá{" "}
-                        <Link
-                          href="/settings/connections"
-                          onClick={onClose}
-                          className="text-accent-text underline"
-                        >
-                          Nối ngay
-                        </Link>
-                      </>
-                    )}
+                    Danh sách kết hợp theo đúng thứ tự từ YouTube
                   </p>
                 </>
               )}
@@ -157,15 +140,6 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
 
           {items.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setAutoplay(!autoplay)}
-                aria-pressed={autoplay}
-                title="Tự phát bài đề xuất khi hết hàng đợi"
-                className={cn(LINK_ACTION, autoplay && "text-accent-text")}
-              >
-                Tự phát tiếp: {autoplay ? "Bật" : "Tắt"}
-              </button>
               {radio && (
                 <button type="button" onClick={stopRadio} className={LINK_ACTION}>
                   Dừng radio

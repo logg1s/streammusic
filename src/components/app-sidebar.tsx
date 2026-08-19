@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Disc3,
+  House,
   ListMusic,
   ListPlus,
   Heart,
   LogOut,
-  Radio,
   Search,
   Settings,
   Users,
@@ -17,13 +18,13 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/", label: "Mới thêm", icon: Radio },
+  { href: "/", label: "Trang chủ", icon: House },
+  { href: "/search", label: "Tìm kiếm", icon: Search },
   { href: "/albums", label: "Album", icon: Disc3 },
   { href: "/artists", label: "Nghệ sĩ", icon: Users },
   { href: "/tracks", label: "Bài hát", icon: ListMusic },
   { href: "/favorites", label: "Yêu thích", icon: Heart },
   { href: "/playlists", label: "Playlist", icon: ListPlus },
-  { href: "/search", label: "Tìm kiếm", icon: Search },
 ] as const;
 
 export function AppSidebar({ userName }: { userName: string | null }) {
@@ -40,16 +41,20 @@ export function AppSidebar({ userName }: { userName: string | null }) {
   return (
     <nav
       aria-label="Điều hướng chính"
-      className="flex h-full flex-col gap-1 border-r border-border px-3 py-5"
+      className="flex h-full flex-col gap-1 border-r border-border bg-surface/60 px-3 py-5"
     >
-      <Link href="/" className="mb-6 flex items-center gap-2.5 px-3">
-        <span className="grid size-7 place-items-center rounded-full border border-accent">
-          <span className="size-2 rounded-full bg-accent" />
-        </span>
-        <span className="text-lg font-semibold tracking-tight">Vọng</span>
+      <Link href="/" className="mb-7 flex h-10 items-center px-3" aria-label="Vọng — Trang chủ">
+        <Image
+          src="/brand/vong-wordmark.png"
+          alt="Vọng"
+          width={96}
+          height={43}
+          priority
+          className="h-auto w-24"
+        />
       </Link>
 
-      <p className="eyebrow px-3 pb-2">Thư viện</p>
+      <p className="eyebrow px-3 pb-2">Khám phá</p>
 
       {LINKS.map(({ href, label, icon: Icon }) => {
         const active =

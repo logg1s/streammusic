@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { PlayableTrack } from "@vong/shared";
 import { ALBUM_CARD_WIDTH, AlbumCard, ArtistRow } from "@/components/album-card";
+import { Artwork } from "@/components/artwork";
 import {
   EmptyNote,
   ErrorNote,
@@ -13,6 +14,7 @@ import {
 import { SectionHeader } from "@/components/section-header";
 import { TrackRow } from "@/components/track-row";
 import { formatLibraryStats } from "@/lib/format";
+import { startRadioFor } from "@/lib/radio-engine";
 import type {
   ArtistList,
   LibraryHome,
@@ -20,7 +22,8 @@ import type {
   YoutubeSections,
 } from "@/lib/dto";
 import { useApi } from "@/lib/use-api";
-import { colors, font, spacing } from "@/theme";
+import { usePlayer } from "@/store/player";
+import { colors, font, radius, spacing } from "@/theme";
 
 /** Số dòng hiện trong một dải ở trang chủ — bấm vào vẫn phát cả dải. */
 const ROWS = 6;
@@ -74,7 +77,16 @@ export default function HomeScreen() {
 
   return (
     <Screen scroll refreshing={home.loading} onRefresh={reloadAll}>
-      <Readout text={formatLibraryStats(data.stats)} />
+      <View style={styles.hero}>
+        <Text style={styles.heroEyebrow}>DÀNH CHO BẠN</Text>
+        <Text style={styles.heroTitle}>Chào bạn</Text>
+        <Text style={styles.heroText}>
+          Nhạc của bạn và danh sách kết hợp do YouTube đề xuất.
+        </Text>
+        <Readout text={formatLibraryStats(data.stats)} />
+      </View>
+
+      <QuickGrid tracks={data.played} />
 
       <Pressable
         accessibilityRole="button"
@@ -164,6 +176,39 @@ export default function HomeScreen() {
   );
 }
 
+function QuickGrid({ tracks }: { tracks: PlayableTrack[] }) {
+  const shown = tracks.slice(0, 6);
+  if (shown.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader label="Nghe tiếp" />
+      <View style={styles.quickGrid}>
+        {shown.map((track, index) => (
+          <Pressable
+            key={track.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Phát ${track.title}`}
+            onPress={() => {
+              if (track.source === "youtube") void startRadioFor(track);
+              else usePlayer.getState().playQueue(shown, index);
+            }}
+            style={({ pressed }) => [
+              styles.quickItem,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Artwork url={track.coverUrl} name={track.title} size={52} rounded="sm" />
+            <Text numberOfLines={2} style={styles.quickTitle}>
+              {track.title}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /**
  * Một dải bài.
  *
@@ -200,6 +245,55 @@ function TrackSection({
 }
 
 const styles = StyleSheet.create({
+  hero: {
+    overflow: "hidden",
+    marginBottom: spacing.xl,
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  heroEyebrow: {
+    color: colors.accentText,
+    fontSize: font.xs,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    marginTop: spacing.sm,
+    color: colors.text,
+    fontSize: font.xxl,
+    fontWeight: "800",
+  },
+  heroText: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    color: colors.muted,
+    fontSize: font.sm,
+    lineHeight: 20,
+  },
+  quickGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  quickItem: {
+    width: "48.5%",
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    overflow: "hidden",
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceElevated,
+  },
+  quickTitle: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
+    color: colors.text,
+    fontSize: font.xs,
+    fontWeight: "700",
+  },
   section: {
     marginBottom: spacing.xxl,
   },

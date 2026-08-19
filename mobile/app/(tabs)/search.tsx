@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
   FlatList,
@@ -28,6 +29,13 @@ import { colors, font, radius, spacing } from "@/theme";
 
 /** Chờ người ta gõ xong mới gọi — mỗi ký tự một request thì YouTube chặn ngay. */
 const DEBOUNCE_MS = 350;
+const SUGGEST_DEBOUNCE_MS = 180;
+const SEARCH_HISTORY_KEY = "vong-search-history";
+const SEARCH_HISTORY_LIMIT = 3;
+
+interface SuggestionList {
+  suggestions: string[];
+}
 
 interface YoutubeState {
   tracks: PlayableTrack[];
@@ -47,12 +55,70 @@ const IDLE: YoutubeState = { tracks: [], loading: false, error: null };
 export default function SearchScreen() {
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
+  const [history, setHistory] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const content = useContentInsets();
+
+  useEffect(() => {
+    void AsyncStorage.getItem(SEARCH_HISTORY_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setHistory(
+            parsed
+              .filter((item): item is string => typeof item === "string")
+              .slice(0, SEARCH_HISTORY_LIMIT),
+          );
+        }
+      } catch {
+        // Bản ghi cũ hỏng không được làm màn tìm kiếm hỏng theo.
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const trimmed = text.trim();
     const timer = setTimeout(() => setQuery(trimmed), DEBOUNCE_MS);
     return () => clearTimeout(timer);
+  }, [text]);
+
+  useEffect(() => {
+    if (!query) return;
+    const timer = setTimeout(() => {
+      setHistory((current) => {
+        const next = [query, ...current.filter((item) => item !== query)].slice(
+          0,
+          SEARCH_HISTORY_LIMIT,
+        );
+        void AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
+        return next;
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const input = text.trim();
+    if (input.length < 2) {
+      return;
+    }
+    let alive = true;
+    const timer = setTimeout(() => {
+      void apiJson<SuggestionList>(
+        `/api/youtube/suggestions?q=${encodeURIComponent(input)}`,
+      )
+        .then((result) => {
+          if (alive) setSuggestions(result.suggestions);
+        })
+        .catch(() => {
+          if (alive) setSuggestions([]);
+        });
+    }, SUGGEST_DEBOUNCE_MS);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, [text]);
 
   const library = useApi<SearchResult>(
@@ -121,7 +187,10 @@ export default function SearchScreen() {
           <Ionicons name="search" size={18} color={colors.subtle} />
           <TextInput
             value={text}
-            onChangeText={setText}
+            onChangeText={(next) => {
+              setText(next);
+              if (next.trim().length < 2) setSuggestions([]);
+            }}
             placeholder="Tên bài, nghệ sĩ hoặc album"
             placeholderTextColor={colors.subtle}
             style={styles.input}
@@ -146,6 +215,41 @@ export default function SearchScreen() {
           ) : null}
         </View>
       </View>
+
+      {(suggestions.length > 0 || (text.length === 0 && history.length > 0)) ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.suggestionStrip}
+        >
+          {(suggestions.length > 0 ? suggestions : history).map((choice) => (
+            <Pressable
+              key={choice}
+              accessibilityRole="button"
+              accessibilityLabel={`Tìm ${choice}`}
+              onPress={() => {
+                setText(choice);
+                setQuery(choice);
+                setSuggestions([]);
+              }}
+              style={({ pressed }) => [
+                styles.suggestion,
+                pressed && styles.suggestionPressed,
+              ]}
+            >
+              <Ionicons
+                name={suggestions.length > 0 ? "search" : "time-outline"}
+                size={14}
+                color={colors.subtle}
+              />
+              <Text numberOfLines={1} style={styles.suggestionText}>
+                {choice}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
 
       <ScrollView
         contentContainerStyle={content}
@@ -250,6 +354,29 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: font.md,
     paddingVertical: spacing.md,
+  },
+  suggestionStrip: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  suggestion: {
+    maxWidth: 240,
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+  },
+  suggestionPressed: {
+    backgroundColor: colors.surfaceElevated,
+  },
+  suggestionText: {
+    color: colors.text,
+    fontSize: font.sm,
   },
   section: {
     marginBottom: spacing.xxl,

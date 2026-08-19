@@ -84,6 +84,15 @@ export interface RadioState {
   seedId: string;
   /** Hiện ở panel hàng đợi, ví dụ "Radio · Chúng Ta Của Hiện Tại". */
   seedLabel: string;
+  /** Playlist Mix mà YouTube trả về cho seed hiện tại. */
+  playlistId: string | null;
+  /** Token trang kế tiếp của chính danh sách YouTube Mix. */
+  continuation: string | null;
+  /**
+   * Bài người dùng đã bỏ khỏi radio này. Giữ riêng với queue để lần nạp sau không
+   * thể thêm nó trở lại chỉ vì nó không còn nằm trong queue.
+   */
+  blockedIds: string[];
   status: "idle" | "loading" | "error";
   /** Hết bài gợi ý (hoặc lỗi không hồi phục) → RadioController thôi gọi API. */
   exhausted: boolean;

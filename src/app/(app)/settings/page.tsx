@@ -3,7 +3,6 @@ import { count, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { tracks, youtubeTasteArtists, youtubeTasteVideos } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
-import { AutoplayToggle } from "@/components/settings/autoplay-toggle";
 import {
   SettingsLinkRow,
   SettingsRow,
@@ -67,10 +66,6 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader eyebrow="Vọng" title="Cài đặt" readout={storageReadout} />
-
-      <SettingsSection label="Phát nhạc">
-        <AutoplayToggle />
-      </SettingsSection>
 
       <SettingsSection label="Giao diện">
         <SettingsRow

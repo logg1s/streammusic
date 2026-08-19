@@ -1,4 +1,9 @@
-import { Innertube, YTNodes } from "youtubei.js";
+import {
+  type Helpers,
+  Innertube,
+  PlaylistPanelContinuation,
+  YTNodes,
+} from "youtubei.js";
 import type { PlayableTrack } from "@vong/shared";
 import {
   LONG_FORM,
@@ -178,6 +183,32 @@ export async function searchTracks(
   return interleaveHits(songs, videos, limit);
 }
 
+/** Cụm từ YouTube Music gợi ý khi người dùng đang nhập ô tìm kiếm. */
+export async function searchSuggestions(
+  input: string,
+  limit = 8,
+): Promise<string[]> {
+  const query = input.trim();
+  if (!query) return [];
+  const yt = await innertube();
+  const sections = await yt.music.getSearchSuggestions(query);
+  const suggestions: string[] = [];
+
+  for (const section of sections) {
+    for (const node of section.contents) {
+      if (!node.is(YTNodes.SearchSuggestion)) continue;
+      const value = node
+        .as(YTNodes.SearchSuggestion)
+        .suggestion.toString()
+        .trim();
+      if (!value || suggestions.includes(value)) continue;
+      suggestions.push(value);
+      if (suggestions.length >= limit) return suggestions;
+    }
+  }
+  return suggestions;
+}
+
 /**
  * Hàng đợi automix của YouTube cho một bài — nguồn ứng viên chính của radio.
  * `automix: true` là thứ khiến YouTube tự nối thêm bài sau danh sách gốc.
@@ -185,16 +216,57 @@ export async function searchTracks(
 export async function upNextQueue(
   videoId: string,
   limit: number,
-): Promise<{ playlistId: string | null; hits: MusicHit[] }> {
+): Promise<{
+  playlistId: string | null;
+  continuation: string | null;
+  hits: MusicHit[];
+}> {
   const yt = await innertube();
   const panel = await yt.music.getUpNext(videoId, true);
+  const hits = hitsFromPlaylistNodes(panel.contents, limit, videoId);
+
+  return {
+    playlistId: panel.playlist_id || null,
+    continuation: panel.continuation || null,
+    hits,
+  };
+}
+
+/** Đọc một node panel thường hoặc wrapper mà YouTube dùng cho bản thay thế. */
+function playlistVideoFromNode(
+  node: YTNodes.PlaylistPanelVideo | YTNodes.PlaylistPanelVideoWrapper,
+): YTNodes.PlaylistPanelVideo | null {
+  if (node.is(YTNodes.PlaylistPanelVideo)) {
+    return node.as(YTNodes.PlaylistPanelVideo);
+  }
+  if (node.is(YTNodes.PlaylistPanelVideoWrapper)) {
+    return node.as(YTNodes.PlaylistPanelVideoWrapper).primary;
+  }
+  return null;
+}
+
+function hitsFromPlaylistNodes(
+  nodes: Iterable<
+    | Helpers.YTNode
+    | YTNodes.PlaylistPanelVideo
+    | YTNodes.PlaylistPanelVideoWrapper
+  >,
+  limit: number,
+  seedVideoId?: string,
+): MusicHit[] {
   const hits: MusicHit[] = [];
 
-  for (const node of panel.contents) {
+  for (const node of nodes) {
     // AutomixPreviewVideo chỉ là chỗ giữ ("sẽ tự phát tiếp"), không phải một bài.
-    if (!node.is(YTNodes.PlaylistPanelVideo)) continue;
-    const item = node.as(YTNodes.PlaylistPanelVideo);
-    if (!item.video_id || item.video_id === videoId) continue;
+    if (
+      !node.is(YTNodes.PlaylistPanelVideo, YTNodes.PlaylistPanelVideoWrapper)
+    ) {
+      continue;
+    }
+    const item = playlistVideoFromNode(
+      node.as(YTNodes.PlaylistPanelVideo, YTNodes.PlaylistPanelVideoWrapper),
+    );
+    if (!item?.video_id || item.video_id === seedVideoId) continue;
     hits.push({
       videoId: item.video_id,
       rawTitle: item.title.toString(),
@@ -204,7 +276,32 @@ export async function upNextQueue(
     if (hits.length >= limit) break;
   }
 
-  return { playlistId: panel.playlist_id || null, hits };
+  return hits;
+}
+
+/**
+ * Trang kế tiếp của đúng YouTube Mix đang phát. Token là opaque và chỉ được chuyển
+ * nguyên vẹn về InnerTube; Vọng không tự xếp hạng hoặc gieo lại từ seed khác.
+ */
+export async function upNextContinuation(
+  continuation: string,
+  limit: number,
+): Promise<{ continuation: string | null; hits: MusicHit[] }> {
+  const yt = await innertube();
+  const page = await yt.actions.execute("/next", {
+    continuation,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  const panel = page.continuation_contents?.is(PlaylistPanelContinuation)
+    ? page.continuation_contents.as(PlaylistPanelContinuation)
+    : null;
+  if (!panel) return { continuation: null, hits: [] };
+
+  return {
+    continuation: panel.continuation || null,
+    hits: hitsFromPlaylistNodes(panel.contents, limit),
+  };
 }
 
 /** Nguồn ứng viên số 2 khi automix mỏng. */

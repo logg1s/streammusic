@@ -94,8 +94,10 @@ export interface PlayerState {
 
   startRadio: (seed: PlayableTrack) => void;
   stopRadio: () => void;
-  /** Đổi seed radio tại chỗ, giữ nguyên hàng đợi. Xem ghi chú ở phần cài đặt. */
+  /** Đổi seed radio tại chỗ, giữ nguyên hàng đợi. Giữ để tương thích bản lưu cũ. */
   rotateRadioSeed: (seed: PlayableTrack) => void;
+  /** Ghi token trang kế tiếp mà YouTube trả về sau mỗi lần nạp. */
+  setRadioPage: (continuation: string | null, playlistId?: string | null) => void;
   setRadioStatus: (
     status: RadioState["status"],
     exhausted?: boolean,
@@ -104,6 +106,8 @@ export interface PlayerState {
   ) => void;
   /** Nối thêm bài vào cuối hàng đợi, bỏ bài đã có. */
   appendTracks: (tracks: PlayableTrack[]) => void;
+  /** Không cho một bài YouTube quay lại trong phiên radio hiện tại. */
+  blockRadioTrack: (trackId: string) => void;
   /** Chèn ngay sau bài đang phát. Bỏ qua nếu bài đã có trong hàng đợi. */
   insertNext: (track: PlayableTrack) => void;
   removeAt: (orderPos: number) => void;
@@ -168,6 +172,9 @@ export function createPlayerStore(
   options: PlayerStoreOptions = {},
 ): PlayerStore {
   const sinks: Partial<Record<TrackSource, PlaybackSink | null>> = {};
+  // Một số engine (đặc biệt YouTube iframe) còn phát 1-2 tick ở vị trí cũ sau seek.
+  // Giữ cửa sổ ngắn để các tick cũ không kéo UI giật ngược rồi nhảy tới đích lần nữa.
+  let seekGuard: { target: number; until: number } | null = null;
 
   function registerSink(source: TrackSource, sink: PlaybackSink | null) {
     sinks[source] = sink;
@@ -192,7 +199,8 @@ export function createPlayerStore(
         muted: false,
         shuffle: false,
         repeat: "off",
-        autoplay: true,
+        // Thư viện/Drive phải dừng ở cuối. Bài YouTube chủ động mở radio riêng.
+        autoplay: false,
         error: null,
         pendingSeek: null,
         advanceFailures: 0,
@@ -200,6 +208,7 @@ export function createPlayerStore(
 
         playQueue(tracks, startIndex = 0) {
           if (tracks.length === 0) return;
+          seekGuard = null;
           const identity = Array.from({ length: tracks.length }, (_, i) => i);
           const order = get().shuffle
             ? shuffledOrder(tracks.length, startIndex)
@@ -220,6 +229,7 @@ export function createPlayerStore(
         playTrackAt(position) {
           const { order } = get();
           if (position < 0 || position >= order.length) return;
+          seekGuard = null;
           set({
             position,
             currentTime: 0,
@@ -287,8 +297,15 @@ export function createPlayerStore(
         },
 
         seek(seconds) {
-          activeSink()?.seek(seconds);
-          set({ currentTime: seconds });
+          if (!Number.isFinite(seconds)) return;
+          const duration = get().duration;
+          const target = Math.max(
+            0,
+            duration > 0 ? Math.min(seconds, duration) : seconds,
+          );
+          seekGuard = { target, until: Date.now() + 1_500 };
+          activeSink()?.seek(target);
+          set({ currentTime: target });
         },
 
         setVolume(volume) {
@@ -335,6 +352,7 @@ export function createPlayerStore(
         },
 
         clearQueue() {
+          seekGuard = null;
           set({
             queue: [],
             order: [],
@@ -351,6 +369,9 @@ export function createPlayerStore(
           const radio: RadioState = {
             seedId: seed.id,
             seedLabel: seed.title,
+            playlistId: null,
+            continuation: null,
+            blockedIds: [],
             status: "loading",
             exhausted: false,
             message: null,
@@ -409,6 +430,18 @@ export function createPlayerStore(
           });
         },
 
+        setRadioPage(continuation, playlistId) {
+          const radio = get().radio;
+          if (!radio) return;
+          set({
+            radio: {
+              ...radio,
+              continuation,
+              playlistId: playlistId ?? radio.playlistId,
+            },
+          });
+        },
+
         setRadioStatus(status, exhausted, message, errorKind) {
           const radio = get().radio;
           if (!radio) return;
@@ -425,9 +458,12 @@ export function createPlayerStore(
         },
 
         appendTracks(tracks) {
-          const { queue, order } = get();
+          const { queue, order, radio } = get();
           // Lô sau có thể trùng lô trước (server chỉ loại theo `exclude` client gửi lên).
-          const seen = new Set(queue.map((t) => t.id));
+          const seen = new Set([
+            ...queue.map((t) => t.id),
+            ...(radio?.blockedIds ?? []),
+          ]);
           const fresh: PlayableTrack[] = [];
           for (const track of tracks) {
             if (seen.has(track.id)) continue;
@@ -438,6 +474,20 @@ export function createPlayerStore(
           set({
             queue: [...queue, ...fresh],
             order: [...order, ...fresh.map((_, i) => queue.length + i)],
+          });
+        },
+
+        blockRadioTrack(trackId) {
+          const radio = get().radio;
+          if (!radio || !trackId) return;
+          set({
+            radio: {
+              ...radio,
+              blockedIds: [
+                ...radio.blockedIds.filter((id) => id !== trackId),
+                trackId,
+              ].slice(-500),
+            },
           });
         },
 
@@ -456,10 +506,11 @@ export function createPlayerStore(
         },
 
         removeAt(orderPos) {
-          const { queue, order, position } = get();
+          const { queue, order, position, radio } = get();
           if (orderPos < 0 || orderPos >= order.length) return;
 
           const removedQueueIndex = order[orderPos];
+          const removed = queue[removedQueueIndex];
           const newQueue = queue.filter((_, i) => i !== removedQueueIndex);
           // Bỏ một phần tử khỏi `queue` làm mọi chỉ số phía sau tụt một bậc, nên `order`
           // phải dịch theo, nếu không hàng đợi trỏ nhầm bài.
@@ -479,6 +530,18 @@ export function createPlayerStore(
             queue: newQueue,
             order: newOrder,
             position: Math.max(0, nextPosition),
+            ...(radio && removed?.source === "youtube"
+              ? {
+                  radio: {
+                    ...radio,
+                    // Cap để một phiên khôi phục rất dài không làm storage phình vô hạn.
+                    blockedIds: [
+                      ...radio.blockedIds.filter((id) => id !== removed.id),
+                      removed.id,
+                    ].slice(-500),
+                  },
+                }
+              : null),
             ...(newOrder.length === 0
               ? { isPlaying: false, currentTime: 0 }
               : null),
@@ -496,9 +559,22 @@ export function createPlayerStore(
         },
 
         syncTime(currentTime, duration) {
+          const safeDuration = Number.isFinite(duration) ? duration : 0;
+          if (!Number.isFinite(currentTime)) {
+            set({ duration: safeDuration });
+            return;
+          }
+          if (seekGuard) {
+            const reached = Math.abs(currentTime - seekGuard.target) <= 1.25;
+            if (!reached && Date.now() < seekGuard.until) {
+              set({ duration: safeDuration });
+              return;
+            }
+            seekGuard = null;
+          }
           set({
             currentTime,
-            duration: Number.isFinite(duration) ? duration : 0,
+            duration: safeDuration,
           });
         },
 
@@ -552,6 +628,9 @@ export function createPlayerStore(
             state.radio = {
               ...state.radio,
               status: "idle",
+              playlistId: state.radio.playlistId ?? null,
+              continuation: state.radio.continuation ?? null,
+              blockedIds: state.radio.blockedIds ?? [],
               errorKind: state.radio.errorKind ?? null,
             };
           }
