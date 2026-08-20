@@ -11,11 +11,11 @@ export const dynamic = "force-dynamic";
 const SIGNALS = ["skip", "finish", "block"] as const;
 
 /**
- * Ghi lại phản ứng của người nghe với một video YouTube.
+ * Compatibility endpoint ghi lại phản ứng với một video YouTube.
  *
- * Đây là toàn bộ vòng học của radio: lô sau tránh video bị bỏ qua và hạ điểm
- * nghệ sĩ bị bỏ qua. "block" là tín hiệu từ IFrame player (lỗi 101/150 — chủ
- * kênh chặn nhúng), video đó không bao giờ được đưa vào lô nữa.
+ * Client hiện tại dùng YouTube up-next và tombstone trong phiên, nên không gọi route
+ * này và radio hiện tại cũng không đọc `radio_feedback`. Giữ contract để client cũ
+ * không vỡ; "block" vẫn đánh dấu metadata video là không nhúng được.
  */
 export async function POST(request: Request) {
   try {

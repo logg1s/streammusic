@@ -72,6 +72,7 @@ mobile/credentials/
 # release binaries — these belong on GitHub Releases, not in git
 /Vong_*.apk
 *.apk
+*.apk.sha256
 *.exe
 *.msi
 *.dmg

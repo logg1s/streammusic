@@ -8,8 +8,8 @@ import { playerStore } from "@/store/player";
  *
  * Là singleton cấp module chứ không nằm trong `RadioController`, vì `PlaybackEngine`
  * cũng cần chạm tới nó: khi một bài không phát được và engine tự nhảy bài, nó PHẢI báo
- * `noteError` trước, nếu không cú nhảy đó bị ghi thành "người dùng không thích bài này"
- * — vĩnh viễn, theo tài khoản, không có đường gỡ.
+ * `noteError` trước, nếu không cú nhảy đó bị coi là skip chủ động và tạo tombstone
+ * sai trong radio session hiện tại.
  *
  * Toàn bộ quyết định radio nằm ở `@vong/shared`. Trước đây app này giữ một bản CHÉP TAY
  * của logic đó; hai bản đã lệch nhau ở đúng đường xử lý lỗi — chỗ đắt nhất để lệch.

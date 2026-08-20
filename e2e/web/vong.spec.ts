@@ -33,6 +33,29 @@ test("đăng nhập và duyệt thư viện", async ({ browser, page }) => {
   await auth.close();
 });
 
+test("ghép nối web bằng mã được xác nhận trên điện thoại", async ({ browser }) => {
+  const targetContext = await browser.newContext();
+  const target = await targetContext.newPage();
+  await target.goto("/login");
+  await expect(target.getByText("Quét để đăng nhập web", { exact: true })).toBeVisible();
+  const displayCode = (await target.locator("p.font-mono").innerText()).trim();
+  expect(displayCode).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/);
+
+  const phone = await loggedInPage(browser);
+  await phone.goto(`/pair?code=${encodeURIComponent(displayCode)}`);
+  await expect(phone.getByText("trình duyệt web", { exact: true })).toBeVisible();
+  await phone
+    .getByRole("button", { name: "Ghép nối trình duyệt web", exact: true })
+    .click();
+  await expect(phone).toHaveURL(/\/pair\?paired=web$/);
+
+  await expect(target).toHaveURL(/\/$/, { timeout: 15_000 });
+  await expect(target.getByRole("heading", { name: "Chào bạn" })).toBeVisible();
+
+  await phone.context().close();
+  await targetContext.close();
+});
+
 test("tìm kiếm, playlist, phát nhạc, chuyển bài và phát nền", async ({ browser }) => {
   const page = await loggedInPage(browser);
   const data = await fixture();
@@ -56,6 +79,13 @@ test("tìm kiếm, playlist, phát nhạc, chuyển bài và phát nền", async
       Math.max(0, ...nodes.filter((node) => !(node as HTMLAudioElement).paused).map((node) => (node as HTMLAudioElement).currentTime)),
     );
   await expect.poll(playingTime, { timeout: 15_000 }).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Hàng đợi" }).click();
+  const queue = page.getByRole("dialog", { name: "Hàng đợi phát" });
+  await expect(queue).toBeVisible();
+  await expect(queue.getByText(data.titles[2], { exact: true })).toBeVisible();
+  await queue.getByRole("button", { name: "Đóng" }).click();
+  await expect(queue).toBeHidden();
 
   await page.getByRole("button", { name: "Bài sau" }).click();
   await expect(page.getByText(data.titles[1], { exact: true }).last()).toBeVisible();

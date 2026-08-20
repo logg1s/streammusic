@@ -30,7 +30,7 @@ backgrounded, and YouTube audio URLs cannot be resolved reliably from server IPs
 
 - In: Google Drive, Dropbox, and OneDrive connections; metadata scanning; personal
   library browsing; playback across web, Windows, Android phone, and Android TV;
-  D-pad-first TV navigation and browser-assisted TV pairing; YouTube discovery;
+  D-pad-first TV navigation and phone-assisted QR/code pairing for TV and web; YouTube discovery;
   radio queues; favorites; playlists; product telemetry; native update discovery.
 - Out: uploading or hosting a second canonical copy of a listener's media;
   server-side YouTube audio resolution; selling media or subscriptions; public

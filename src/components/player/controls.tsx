@@ -42,9 +42,9 @@ export function IconButton({
       title={label}
       aria-pressed={active}
       className={cn(
-        "grid place-items-center rounded-full transition-colors",
-        size === "lg" ? "size-11" : "size-9",
-        active ? "text-accent-text" : "text-muted-foreground hover:text-foreground",
+        "grid place-items-center rounded-full transition-[background,color,transform] hover:bg-surface-hover active:scale-95",
+        size === "lg" ? "size-12" : "size-10",
+        active ? "bg-surface-hover text-accent-text" : "text-muted-foreground hover:text-foreground",
         disabled && "cursor-not-allowed opacity-40 hover:text-muted-foreground",
       )}
     >
@@ -72,7 +72,7 @@ export function PlayPauseButton({ size = "md" }: { size?: "md" | "lg" }) {
       aria-label={loading ? "Đang tải" : isPlaying ? "Tạm dừng" : "Phát"}
       className={cn(
         "grid shrink-0 place-items-center rounded-full bg-accent text-accent-foreground transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-subtle disabled:hover:scale-100",
-        size === "lg" ? "size-14" : "size-10",
+        size === "lg" ? "size-16" : "size-11",
       )}
     >
       {loading ? (

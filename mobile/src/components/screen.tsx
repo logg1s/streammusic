@@ -32,8 +32,8 @@ export function useContentInsets() {
 
   return useMemo(
     () => ({
-      paddingTop: spacing.lg,
-      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.xl,
+      paddingHorizontal: spacing.xl,
       paddingBottom:
         insets.bottom +
         layout.playerBarHeight +

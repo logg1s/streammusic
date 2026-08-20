@@ -9,10 +9,15 @@ const PAIRING_TTL_MS = 10 * 60 * 1000;
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_PER_CLIENT = 6;
 const RATE_GLOBAL = 120;
-const PENDING_PREFIX = "tv-pairing:pending:";
-const APPROVED_PREFIX = "tv-pairing:approved:";
+const PAIRING_PREFIX = "device-pairing:";
+const PENDING_PREFIX = `${PAIRING_PREFIX}pending:`;
+const APPROVED_PREFIX = `${PAIRING_PREFIX}approved:`;
+const LEGACY_PENDING_PREFIX = "tv-pairing:pending:";
+const LEGACY_APPROVED_PREFIX = "tv-pairing:approved:";
 const RATE_PREFIX = "tv-pairing:rate:";
 const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+export type PairingTarget = "tv" | "web";
 
 export class TvPairingCodeError extends Error {
   constructor() {
@@ -25,7 +30,7 @@ export class TvPairingRateLimitError extends Error {
   readonly retryAfterSeconds: number;
 
   constructor(retryAfterSeconds: number) {
-    super("Quá nhiều yêu cầu ghép nối TV, vui lòng thử lại sau");
+    super("Quá nhiều yêu cầu ghép nối thiết bị, vui lòng thử lại sau");
     this.name = "TvPairingRateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
   }
@@ -33,6 +38,14 @@ export class TvPairingRateLimitError extends Error {
 
 export interface TvPairingChallenge {
   deviceCode: string;
+  userCode: string;
+  displayCode: string;
+  expiresAt: number;
+  target: PairingTarget;
+}
+
+export interface PairingApproval {
+  target: PairingTarget;
   userCode: string;
   displayCode: string;
   expiresAt: number;
@@ -101,8 +114,9 @@ async function enforcePairingStartRateLimit(headers: Headers): Promise<void> {
   }
 }
 
-export async function startTvPairing(
+export async function startDevicePairing(
   requestHeaders: Headers = new Headers(),
+  target: PairingTarget = "tv",
 ): Promise<TvPairingChallenge> {
   const db = getDb();
   const now = new Date();
@@ -111,7 +125,10 @@ export async function startTvPairing(
     .delete(verificationTokens)
     .where(
       and(
-        like(verificationTokens.identifier, "tv-pairing:%"),
+        or(
+          like(verificationTokens.identifier, `${PAIRING_PREFIX}%`),
+          like(verificationTokens.identifier, "tv-pairing:%"),
+        ),
         lt(verificationTokens.expires, now),
       ),
     );
@@ -120,11 +137,16 @@ export async function startTvPairing(
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const userCode = createUserCode();
-    const identifier = PENDING_PREFIX + userCode;
+    const identifier = `${PENDING_PREFIX}${target}:${userCode}`;
     const existing = await db
       .select({ token: verificationTokens.token })
       .from(verificationTokens)
-      .where(eq(verificationTokens.identifier, identifier))
+      .where(
+        or(
+          like(verificationTokens.identifier, `${PENDING_PREFIX}%:${userCode}`),
+          eq(verificationTokens.identifier, LEGACY_PENDING_PREFIX + userCode),
+        ),
+      )
       .limit(1);
     if (existing.length > 0) continue;
 
@@ -140,50 +162,85 @@ export async function startTvPairing(
       userCode,
       displayCode: `${userCode.slice(0, 5)}-${userCode.slice(5)}`,
       expiresAt,
+      target,
     };
   }
 
-  throw new Error("Không thể tạo mã ghép nối TV");
+  throw new Error("Không thể tạo mã ghép nối thiết bị");
 }
 
-export async function approveTvPairing(
-  userId: string,
-  rawCode: string,
-): Promise<void> {
+function parsePendingTarget(identifier: string): PairingTarget | null {
+  if (identifier.startsWith(LEGACY_PENDING_PREFIX)) return "tv";
+  if (!identifier.startsWith(PENDING_PREFIX)) return null;
+  const target = identifier.slice(PENDING_PREFIX.length).split(":", 1)[0];
+  return target === "tv" || target === "web" ? target : null;
+}
+
+async function findPendingPairing(rawCode: string) {
   const userCode = normalizeTvPairingCode(rawCode);
   if (userCode.length !== 10) throw new TvPairingCodeError();
 
   const db = getDb();
-  const identifier = PENDING_PREFIX + userCode;
   const rows = await db
     .select({
+      identifier: verificationTokens.identifier,
       token: verificationTokens.token,
       expires: verificationTokens.expires,
     })
     .from(verificationTokens)
-    .where(eq(verificationTokens.identifier, identifier))
+    .where(
+      or(
+        like(verificationTokens.identifier, `${PENDING_PREFIX}%:${userCode}`),
+        eq(verificationTokens.identifier, LEGACY_PENDING_PREFIX + userCode),
+      ),
+    )
     .limit(2);
 
   if (rows.length !== 1 || rows[0].expires.getTime() <= Date.now()) {
     throw new TvPairingCodeError();
   }
+  const target = parsePendingTarget(rows[0].identifier);
+  if (!target) throw new TvPairingCodeError();
+  return { ...rows[0], target, userCode };
+}
+
+export async function inspectDevicePairing(
+  rawCode: string,
+): Promise<PairingApproval> {
+  const row = await findPendingPairing(rawCode);
+  return {
+    target: row.target,
+    userCode: row.userCode,
+    displayCode: `${row.userCode.slice(0, 5)}-${row.userCode.slice(5)}`,
+    expiresAt: row.expires.getTime(),
+  };
+}
+
+export async function approveDevicePairing(
+  userId: string,
+  rawCode: string,
+): Promise<PairingTarget> {
+  const row = await findPendingPairing(rawCode);
+  const db = getDb();
 
   const updated = await db
     .update(verificationTokens)
-    .set({ identifier: APPROVED_PREFIX + userId })
+    .set({ identifier: `${APPROVED_PREFIX}${row.target}:${userId}` })
     .where(
       and(
-        eq(verificationTokens.identifier, identifier),
-        eq(verificationTokens.token, rows[0].token),
+        eq(verificationTokens.identifier, row.identifier),
+        eq(verificationTokens.token, row.token),
       ),
     )
     .returning({ token: verificationTokens.token });
   if (updated.length !== 1) throw new TvPairingCodeError();
+  return row.target;
 }
 
-export async function consumeTvPairing(
+export async function consumeDevicePairing(
   requestHeaders: Headers,
   deviceCode: string,
+  target: PairingTarget,
 ): Promise<(MintedToken & { userId: string }) | null> {
   if (deviceCode.length < 32 || deviceCode.length > 128) return null;
 
@@ -195,9 +252,25 @@ export async function consumeTvPairing(
       and(
         eq(verificationTokens.token, tokenHash),
         or(
-          like(verificationTokens.identifier, `${APPROVED_PREFIX}%`),
+          like(verificationTokens.identifier, `${APPROVED_PREFIX}${target}:%`),
+          ...(target === "tv"
+            ? [like(verificationTokens.identifier, `${LEGACY_APPROVED_PREFIX}%`)]
+            : []),
           and(
-            like(verificationTokens.identifier, `${PENDING_PREFIX}%`),
+            or(
+              like(
+                verificationTokens.identifier,
+                `${PENDING_PREFIX}${target}:%`,
+              ),
+              ...(target === "tv"
+                ? [
+                    like(
+                      verificationTokens.identifier,
+                      `${LEGACY_PENDING_PREFIX}%`,
+                    ),
+                  ]
+                : []),
+            ),
             lt(verificationTokens.expires, new Date()),
           ),
         ),
@@ -208,11 +281,36 @@ export async function consumeTvPairing(
       expires: verificationTokens.expires,
     });
 
-  if (!row?.identifier.startsWith(APPROVED_PREFIX)) return null;
+  if (!row) return null;
   if (row.expires.getTime() <= Date.now()) return null;
 
-  const userId = row.identifier.slice(APPROVED_PREFIX.length);
+  const approvedPrefix = row.identifier.startsWith(LEGACY_APPROVED_PREFIX)
+    ? LEGACY_APPROVED_PREFIX
+    : `${APPROVED_PREFIX}${target}:`;
+  if (!row.identifier.startsWith(approvedPrefix)) return null;
+  const userId = row.identifier.slice(approvedPrefix.length);
   if (!userId) return null;
   const minted = await mintForUser(requestHeaders, userId);
   return { ...minted, userId };
+}
+
+/** Compatibility wrappers for the already-shipped Android TV client and routes. */
+export function startTvPairing(
+  requestHeaders: Headers = new Headers(),
+): Promise<TvPairingChallenge> {
+  return startDevicePairing(requestHeaders, "tv");
+}
+
+export async function approveTvPairing(
+  userId: string,
+  rawCode: string,
+): Promise<void> {
+  await approveDevicePairing(userId, rawCode);
+}
+
+export function consumeTvPairing(
+  requestHeaders: Headers,
+  deviceCode: string,
+): Promise<(MintedToken & { userId: string }) | null> {
+  return consumeDevicePairing(requestHeaders, deviceCode, "tv");
 }

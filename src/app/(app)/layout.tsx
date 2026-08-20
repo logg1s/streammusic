@@ -45,7 +45,7 @@ export default async function AppLayout({
       <RadioConfigProvider enabled personalized={linked}>
         <div className="flex h-dvh flex-col overflow-hidden bg-background">
           <div className="flex min-h-0 flex-1">
-            <aside className="hidden w-[252px] shrink-0 md:block">
+            <aside className="hidden w-[224px] shrink-0 md:block">
               <AppSidebar
                 userName={session.user.name ?? session.user.email ?? null}
               />
@@ -53,7 +53,7 @@ export default async function AppLayout({
 
             <main className="min-h-0 flex-1 overflow-y-auto">
               <MobileHeader />
-              <div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 md:px-8 md:pt-8 lg:px-10">
+              <div className="mx-auto w-full max-w-[1500px] px-4 pb-16 pt-5 md:px-8 md:pt-10 lg:px-10 xl:px-12">
                 {children}
               </div>
             </main>

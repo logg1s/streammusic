@@ -30,7 +30,8 @@ Treat the goal as one bounded objective with a verifiable stopping condition. Ke
 - Preserve the single-audible-source invariant across audio pool, YouTube iframe, and native engines.
 - Keep YouTube audio resolution on the user's device.
 - Preserve `Authorization: Bearer` for native library streaming.
-- Preserve Googlevideo range requests at no more than 1 MiB.
+- Preserve a `Range` header on every native googlevideo byte request; current
+  readers use open-ended `bytes=N-` ranges.
 - Change Android native behavior through `mobile/plugins/` or `mobile/modules/`; never hand-edit generated `mobile/android/`.
 - Add or update regression tests alongside behavior changes.
 - After each checkpoint, run targeted checks and inspect the diff before continuing.

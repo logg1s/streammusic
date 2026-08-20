@@ -32,7 +32,7 @@ export function PlayerBar() {
 
   return (
     <>
-      <footer className="border-t border-border bg-surface/95 backdrop-blur">
+      <footer className="relative z-30 border-t border-border bg-surface/96 shadow-[0_-10px_34px_rgba(0,0,0,0.12)] backdrop-blur-xl">
         {error && (
           <p
             role="status"
@@ -45,7 +45,7 @@ export function PlayerBar() {
         {/* Mobile: vạch tiến độ mảnh ở mép trên, vì không đủ chỗ cho thanh tua đầy đủ. */}
         <MiniProgress />
 
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-3 px-3 sm:h-20 sm:gap-6 sm:px-4">
+        <div className="mx-auto flex h-16 max-w-[1680px] items-center gap-3 px-3 sm:h-[88px] sm:gap-7 sm:px-6">
           <NowPlaying onOpenSheet={() => setSheetOpen(true)} />
 
           {/* Desktop */}
@@ -53,7 +53,7 @@ export function PlayerBar() {
             <TransportRow />
             <Scrubber className="max-w-xl" />
           </div>
-          <div className="hidden items-center gap-1 md:flex md:w-[220px] md:justify-end">
+          <div className="hidden items-center gap-1 md:flex md:w-[260px] md:justify-end">
             {radioEnabled && (
               <IconButton
                 label="Radio bài này"
@@ -131,7 +131,7 @@ function NowPlaying({ onOpenSheet }: { onOpenSheet: () => void }) {
 
   if (!track) {
     return (
-      <div className="flex min-w-0 flex-1 items-center gap-3 sm:w-[320px] sm:flex-none">
+      <div className="flex min-w-0 flex-1 items-center gap-3 sm:w-[350px] sm:flex-none">
         <div className="size-11 shrink-0 rounded-md border border-dashed border-border sm:size-12" />
         <p className="truncate text-sm text-subtle">Chưa chọn bài nào</p>
       </div>
@@ -156,7 +156,7 @@ function NowPlaying({ onOpenSheet }: { onOpenSheet: () => void }) {
   );
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-3 sm:w-[320px] sm:flex-none">
+    <div className="flex min-w-0 flex-1 items-center gap-3 sm:w-[350px] sm:flex-none">
       {/* Mobile: cả khối là nút mở màn hình đang phát. */}
       <button
         type="button"

@@ -33,8 +33,9 @@ Last-Reviewed: 2026-08-19
 - Web sign-in -> Auth.js Google flow -> JWT session cookie -> user-scoped API access.
 - Native sign-in -> system browser cookie session -> 120-second single-use handoff
   code -> native bearer JWT -> authenticated API and library-stream requests.
-- TV sign-in -> short-lived user code and high-entropy device credential ->
-  authenticated browser approval -> atomic one-use exchange -> native bearer JWT.
+- TV/web device sign-in -> target-bound short-lived user code and hashed high-entropy
+  target credential -> phone scan or manual entry -> authenticated explicit approval
+  -> atomic one-use exchange -> native bearer JWT for TV or HttpOnly cookie for web.
 - Connect storage -> provider OAuth -> encrypted token persistence -> select scan
   roots -> persisted scan job -> batched metadata range reads -> library rows.
 - Play library track -> ownership lookup -> cached/refreshable provider credential ->

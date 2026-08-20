@@ -101,7 +101,7 @@ export function PlayerBar() {
 const styles = StyleSheet.create({
   bar: {
     height: layout.playerBarHeight,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceElevated,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: font.xs,
     textAlign: "center",
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
   },
   progressTrack: {

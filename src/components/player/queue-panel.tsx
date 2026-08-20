@@ -104,14 +104,15 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
 
       <aside
         role="dialog"
+        aria-modal="true"
         aria-label="Hàng đợi phát"
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-xl"
+        className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-surface pb-[env(safe-area-inset-bottom)] shadow-2xl sm:max-w-[420px]"
       >
-        <header className="border-b border-border px-4 py-3">
+        <header className="border-b border-border px-5 py-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium">Hàng đợi</p>
-              <p className="readout mt-0.5">
+              <h2 className="text-2xl font-bold tracking-tight">Hàng đợi</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 {sapToi > 0 ? `Còn ${sapToi} bài phía sau` : "Bài cuối trong hàng đợi"}
               </p>
 
@@ -205,7 +206,7 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
           )}
         </header>
 
-        <ol className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
+        <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
           {items.map(({ track, pos }) => {
             const dangPhat = pos === position;
             const daQua = pos < position;
@@ -213,8 +214,8 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
               <li
                 key={`${track.id}-${pos}`}
                 className={cn(
-                  "group/row flex items-center gap-1 pr-2 transition-colors hover:bg-surface",
-                  dangPhat && "bg-surface",
+                  "group/row flex items-center gap-1 rounded-lg pr-2 transition-colors hover:bg-surface-hover",
+                  dangPhat && "bg-surface-hover",
                   daQua && "opacity-50",
                 )}
               >

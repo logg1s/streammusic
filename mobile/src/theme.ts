@@ -7,26 +7,27 @@
  */
 
 export const colors = {
-  bg: "#0b0b0f",
-  surface: "#16161d",
+  bg: "#090a0c",
+  surface: "#121417",
   /** Nền nổi hơn `surface` một bậc — thẻ, nút tròn, ô nhập trên surface. */
-  surfaceElevated: "#1f1f29",
-  text: "#f4f4f5",
-  muted: "#a1a1aa",
+  surfaceElevated: "#1b1e22",
+  text: "#f5f5f4",
+  muted: "#a5a7ad",
   /** #71717a chỉ đạt 4.12 trên nền tối — dưới chuẩn AA cho chữ thường. */
-  subtle: "#8a8a94",
-  accent: "#f43f5e",
+  subtle: "#858891",
+  accent: "#ff625c",
   /** Nền nhấn mờ cho trạng thái đang chọn/đang phát — accent 14% trên nền tối. */
-  accentSoft: "rgba(244, 63, 94, 0.14)",
+  accentSoft: "rgba(255, 98, 92, 0.14)",
   /**
    * Màu nhấn dùng làm CHỮ trên nền tối (hồng nhạt, rose-300).
    * `accent` là màu NỀN của nút; đặt nguyên nó lên nền tối thì vẫn đạt AA nhưng
    * lệch hẳn với bản web, nên chữ nhấn đi lối riêng — giống `--accent-text` bên web.
    */
-  accentText: "#fda4af",
+  accentText: "#ff817b",
   /** Lỗi và cảnh báo. Tách khỏi `accent` để cảnh báo không lẫn với chỗ đang nhấn. */
   danger: "#f87171",
-  border: "#27272a",
+  border: "#292c31",
+  borderStrong: "#3a3e45",
 } as const;
 
 /** Chữ và icon nằm TRÊN nền `accent` — trắng đặc để đủ tương phản với hồng đậm. */
@@ -43,8 +44,9 @@ export const spacing = {
 
 export const radius = {
   sm: 6,
-  md: 10,
-  lg: 16,
+  md: 12,
+  lg: 18,
+  xl: 24,
   full: 999,
 } as const;
 

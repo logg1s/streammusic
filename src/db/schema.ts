@@ -262,7 +262,11 @@ export const youtubeTracks = pgTable("youtube_tracks", {
     .defaultNow(),
 });
 
-/** Danh sách ứng viên đã đào cho một seed. Tồn tại chỉ để tiết kiệm hạn 100 lần search.list/ngày. */
+/**
+ * Cache của bộ xếp hạng radio cũ. Route `/api/radio` hiện dùng trực tiếp YouTube
+ * up-next và không đọc/ghi bảng này. Giữ schema để không tạo migration phá dữ liệu
+ * trong một đợt cleanup hành vi-preserving.
+ */
 export const radioSeeds = pgTable("radio_seeds", {
   /** normalizeKey(artist) + "|" + normalizeKey(title) */
   seedKey: text("seed_key").primaryKey(),
@@ -281,7 +285,10 @@ export const youtubeTasteSourceEnum = pgEnum("youtube_taste_source", [
   "own_playlist",
 ]);
 
-/** Đếm skip/finish để lô gợi ý sau tránh thứ người dùng đã bỏ qua. */
+/**
+ * Counters của compatibility endpoint `/api/radio/feedback`. Client hiện tại không
+ * gửi skip/finish vào đây và radio up-next không đọc bảng này.
+ */
 export const radioFeedback = pgTable(
   "radio_feedback",
   {
@@ -301,9 +308,9 @@ export const radioFeedback = pgTable(
 );
 
 /**
- * Lịch sử nghe của chính app — nguồn duy nhất cho "Nghe gần đây" và cho công thức
- * xếp hạng radio. Cố tình KHÔNG lấy số liệu từ YouTube: điều khoản Data API cấm
- * lưu/suy diễn dữ liệu người dùng của họ (§III.E.4.h).
+ * Lịch sử nghe của chính app — nguồn cho "Nghe gần đây" và các play seed cá nhân.
+ * Cố tình KHÔNG lấy số liệu từ YouTube: điều khoản Data API cấm lưu/suy diễn dữ liệu
+ * người dùng của họ (§III.E.4.h).
  */
 export const playEvents = pgTable(
   "play_events",

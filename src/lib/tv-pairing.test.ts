@@ -142,21 +142,25 @@ vi.mock("@/db", () => ({
 }));
 
 import {
+  approveDevicePairing,
   approveTvPairing,
+  consumeDevicePairing,
   consumeTvPairing,
+  inspectDevicePairing,
   normalizeTvPairingCode,
+  startDevicePairing,
   startTvPairing,
   TvPairingCodeError,
   TvPairingRateLimitError,
 } from "./tv-pairing";
 
-function challengeRow() {
+function challengeRow(target = "tv") {
   return harness.rows.find((row) =>
-    row.identifier.startsWith("tv-pairing:pending:"),
+    row.identifier.startsWith(`device-pairing:pending:${target}:`),
   );
 }
 
-describe("TV pairing", () => {
+describe("device pairing", () => {
   beforeEach(() => {
     harness.rows = [];
     harness.minted = 0;
@@ -176,12 +180,43 @@ describe("TV pairing", () => {
     expect(challenge.userCode).toHaveLength(10);
     expect(challenge.displayCode).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/);
     expect(stored?.token).not.toBe(challenge.deviceCode);
-    expect(stored?.identifier).toBe(`tv-pairing:pending:${challenge.userCode}`);
+    expect(challenge.target).toBe("tv");
+    expect(stored?.identifier).toBe(
+      `device-pairing:pending:tv:${challenge.userCode}`,
+    );
     expect(
       await consumeTvPairing(new Headers(), challenge.deviceCode),
     ).toBeNull();
     expect(challengeRow()).toEqual(stored);
     expect(harness.minted).toBe(0);
+  });
+
+  it("identifies the target for phone approval and binds consume to it", async () => {
+    const challenge = await startDevicePairing(new Headers(), "web");
+    const approval = await inspectDevicePairing(challenge.displayCode);
+
+    expect(approval).toMatchObject({
+      target: "web",
+      displayCode: challenge.displayCode,
+    });
+    expect(challengeRow("web")?.token).not.toBe(challenge.deviceCode);
+
+    await approveDevicePairing("user-web", challenge.userCode);
+    expect(
+      await consumeDevicePairing(new Headers(), challenge.deviceCode, "tv"),
+    ).toBeNull();
+    expect(harness.minted).toBe(0);
+
+    const session = await consumeDevicePairing(
+      new Headers(),
+      challenge.deviceCode,
+      "web",
+    );
+    expect(session).toMatchObject({
+      token: "session-for-user-web",
+      userId: "user-web",
+    });
+    expect(harness.minted).toBe(1);
   });
 
   it("rejects an unknown credential without consuming the approved challenge", async () => {
@@ -247,7 +282,7 @@ describe("TV pairing", () => {
     );
     expect(
       harness.rows.filter((row) =>
-        row.identifier.startsWith("tv-pairing:pending:"),
+        row.identifier.startsWith("device-pairing:pending:tv:"),
       ),
     ).toHaveLength(6);
   });

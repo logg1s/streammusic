@@ -32,25 +32,25 @@ export function AppSidebar({ userName }: { userName: string | null }) {
 
   const itemClass = (active: boolean) =>
     cn(
-      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+      "relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-[background,color,transform]",
       active
-        ? "bg-surface-hover font-medium text-foreground"
-        : "text-muted-foreground hover:bg-surface hover:text-foreground",
+        ? "bg-surface-hover font-semibold text-foreground before:absolute before:-left-3 before:h-7 before:w-0.5 before:rounded-full before:bg-accent"
+        : "text-muted-foreground hover:translate-x-0.5 hover:bg-surface-hover/60 hover:text-foreground",
     );
 
   return (
     <nav
       aria-label="Điều hướng chính"
-      className="flex h-full flex-col gap-1 border-r border-border bg-surface/60 px-3 py-5"
+      className="flex h-full flex-col gap-1 border-r border-border bg-surface/45 px-3 py-5"
     >
-      <Link href="/" className="mb-7 flex h-10 items-center px-3" aria-label="Vọng — Trang chủ">
+      <Link href="/" className="mb-8 flex h-10 items-center px-3" aria-label="Vọng — Trang chủ">
         <Image
           src="/brand/vong-wordmark.png"
           alt="Vọng"
           width={1120}
           height={300}
           preload
-          className="h-auto w-28"
+          className="h-auto w-24"
         />
       </Link>
 

@@ -34,6 +34,9 @@ and reordering update the queue without corrupting track identity.
 - `AC-PLAYBACK-001-02`: Given a current track more than three seconds in, when previous is requested, then playback seeks to its start instead of changing tracks.
 - `AC-PLAYBACK-001-03`: Given repeat-one at track end, when end is handled, then the same track restarts; given repeat-all at queue end, then the first ordered track starts.
 - `AC-PLAYBACK-001-04`: Given queue mutations, when a track is inserted, removed, or moved, then the order remains valid and duplicate insertions are ignored.
+- `AC-PLAYBACK-001-05`: Given a non-empty queue, when a listener opens it on web
+  or Android phone, then upcoming tracks appear in an independent scrollable
+  drawer or sheet without requiring the listener to scroll past Now Playing.
 
 ### Evidence
 
@@ -97,6 +100,9 @@ or the app is backgrounded. The TV shell mounts no second playback engine.
 - `AC-PLAYBACK-004-03`: Given Windows playback while minimized, when SMTC transport controls are used, then Tauri events update the shared player state.
 - `AC-PLAYBACK-004-04`: Given Android TV playback, when the listener uses D-pad transport controls or a hardware media key, then the existing Media3 session changes state without mounting another audible source.
 - `AC-PLAYBACK-004-05`: Given native Android playback with bearer-backed items queued, when the listener signs out, then Media3 and the shared queue are cleared before the bearer session is removed.
+- `AC-PLAYBACK-004-06`: Given Android TV playback, when Now Playing and its queue
+  are opened, then transport controls do not cover content, hardware Back returns
+  to browsing, and visible actions expose an unambiguous D-pad focus state.
 
 ### Evidence
 

@@ -163,8 +163,11 @@ export interface TvPairingChallenge {
   userCode: string;
   displayCode: string;
   verificationUri: string;
+  verificationUriComplete: string;
+  qrImageUri: string;
   expiresAt: number;
   intervalMs: number;
+  target: "tv";
 }
 
 function parseTvPairingChallenge(value: unknown): TvPairingChallenge | null {
@@ -175,6 +178,8 @@ function parseTvPairingChallenge(value: unknown): TvPairingChallenge | null {
     "userCode",
     "displayCode",
     "verificationUri",
+    "verificationUriComplete",
+    "qrImageUri",
   ] as const;
   for (const key of requiredStrings) {
     if (typeof record[key] !== "string" || record[key].length === 0) {
@@ -183,6 +188,7 @@ function parseTvPairingChallenge(value: unknown): TvPairingChallenge | null {
   }
   const expiresAt = record.expiresAt;
   const intervalMs = record.intervalMs;
+  if (record.target !== "tv") return null;
   if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) return null;
   if (typeof intervalMs !== "number" || !Number.isFinite(intervalMs))
     return null;
@@ -191,8 +197,11 @@ function parseTvPairingChallenge(value: unknown): TvPairingChallenge | null {
     userCode: record.userCode as string,
     displayCode: record.displayCode as string,
     verificationUri: record.verificationUri as string,
+    verificationUriComplete: record.verificationUriComplete as string,
+    qrImageUri: record.qrImageUri as string,
     expiresAt,
     intervalMs,
+    target: "tv",
   };
 }
 

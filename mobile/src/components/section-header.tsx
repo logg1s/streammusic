@@ -17,7 +17,7 @@ export function SectionHeader({
 }) {
   return (
     <View style={styles.row}>
-      <Text style={styles.label}>{label.toUpperCase()}</Text>
+      <Text style={styles.label}>{label}</Text>
       {actionLabel && onAction ? (
         <Pressable
           onPress={onAction}
@@ -36,17 +36,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   label: {
-    color: colors.muted,
-    fontSize: font.xs,
-    fontWeight: "700",
-    letterSpacing: 1.4,
+    color: colors.text,
+    fontSize: font.lg,
+    fontWeight: "800",
+    letterSpacing: -0.2,
   },
   action: {
-    color: colors.accent,
-    fontSize: font.xs,
+    color: colors.accentText,
+    fontSize: font.sm,
+    fontWeight: "700",
   },
   actionPressed: {
     opacity: 0.6,

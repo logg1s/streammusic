@@ -10,7 +10,7 @@ import { startRadioFor } from "@/lib/radio-engine";
 import { useIsCurrentTrack, usePlayer } from "@/store/player";
 import { colors, font, radius, spacing } from "@/theme";
 
-export const TRACK_ROW_HEIGHT = 60;
+export const TRACK_ROW_HEIGHT = 68;
 
 /**
  * Một dòng bài hát.
@@ -52,7 +52,11 @@ export const TrackRow = memo(function TrackRow({
         }}
         onLongPress={() => setAdding(true)}
         accessibilityHint="Nhấn giữ để thêm vào playlist"
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        style={({ pressed }) => [
+          styles.row,
+          isCurrent && styles.rowCurrent,
+          pressed && styles.rowPressed,
+        ]}
       >
         {showArtwork ? (
           <Artwork
@@ -117,10 +121,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
   },
   rowPressed: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceElevated,
   },
+  rowCurrent: { backgroundColor: colors.accentSoft },
   ordinal: {
     width: 44,
     textAlign: "center",

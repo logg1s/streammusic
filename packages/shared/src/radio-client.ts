@@ -11,9 +11,8 @@ import type {
  *
  * Là factory vì ba vỏ khác nhau ở đúng hai điểm: web gọi đường dẫn tương đối và
  * mang cookie sẵn, còn Expo/Tauri phải gọi URL tuyệt đối kèm
- * `Authorization: Bearer`. Mọi thứ còn lại — ngưỡng nạp thêm, cách tính "nghe hết",
- * hai bảng feedback — phải giống nhau, nếu không lịch sử nghe của một người dùng sẽ
- * lệch nhau giữa các thiết bị.
+ * `Authorization: Bearer`. Mọi thứ còn lại — ngưỡng nạp thêm, cách ghi lịch sử nghe,
+ * và tombstone chặn lại trong phiên — phải giống nhau giữa các thiết bị.
  */
 
 /** Lô đầu tiên xin nhiều hơn lô nạp thêm: người dùng vừa bấm Radio nên muốn thấy ngay một danh sách. */
@@ -92,14 +91,13 @@ export interface RadioClientOptions {
 }
 
 /**
- * Vì sao lượt nghe kết thúc. Phân biệt này KHÔNG phải để thống kê cho đẹp: nó quyết
- * định có ghi `radio_feedback` hay không.
+ * Vì sao lượt nghe kết thúc. Phân biệt này quyết định một bài YouTube có bị chặn lại
+ * trong radio session hiện tại hay không.
  *
  * Suy ra "bỏ qua" từ mỗi thời lượng nghe là sai ở đúng chỗ đắt nhất — bài không phát
- * được có time = 0, tức là trông y hệt một cú skip dứt khoát. Ngày 2026-08-16 một
- * chuỗi lỗi phát 63 giây đã ghi 106 skip vào tài khoản chính, xoá vĩnh viễn 7 nghệ sĩ
- * và 47 video khỏi kho gợi ý; 67% toàn bộ thiệt hại của tài khoản đó đến từ một phút
- * không hề có ai nghe nhạc.
+ * được có time = 0, tức là trông y hệt một cú skip dứt khoát. Nếu không phân biệt,
+ * continuation sau sẽ loại nhầm bài chỉ vì engine tự nhảy khi mất mạng hoặc resolve
+ * thất bại.
  *
  * Quy tắc: chỉ con người mới được dạy mô hình. Máy tự nhảy bài thì không.
  */
@@ -128,10 +126,10 @@ export interface PlayedTrack {
 export interface RadioClient {
   startRadioFor(seed: PlayableTrack): Promise<void>;
   refillRadio(continuation: string, exclude: string[]): Promise<void>;
-  /** Ghi lịch sử nghe + tín hiệu skip/finish cho radio. */
+  /** Ghi lịch sử nghe; skip chủ động đồng thời tạo tombstone trong phiên. */
   reportPlayed(last: PlayedTrack): void;
-  /** Bài không phát được (id hỏng, bị chặn nhúng) → đừng gợi ý lại. */
-  reportBlocked(videoId: string, artistName: string | null): void;
+  /** Bài không phát được (id hỏng, bị chặn nhúng) → đừng gợi ý lại trong phiên. */
+  reportBlocked(videoId: string): void;
 }
 
 export function createRadioClient(
@@ -295,8 +293,8 @@ export function createRadioClient(
         true,
       ).catch(() => {});
 
-      // Thứ tự radio nay do chính YouTube Mix quyết định. Không gửi skip/finish vào
-      // bộ xếp hạng cũ của Vọng nữa vì nó có thể loại nghệ sĩ vĩnh viễn.
+      // Thứ tự radio do YouTube up-next quyết định. Không gửi skip/finish vào
+      // compatibility endpoint của bộ xếp hạng cũ.
     },
 
     reportBlocked(videoId) {

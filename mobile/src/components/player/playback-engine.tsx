@@ -218,15 +218,14 @@ export function PlaybackEngine() {
           current.source === "youtube" &&
           current.youtubeVideoId
         ) {
-          reportBlocked(current.youtubeVideoId, current.artistName);
+          reportBlocked(current.youtubeVideoId);
         }
         if (
           failuresRef.current < MAX_CONSECUTIVE_FAILURES &&
           peekNextTrack()
         ) {
-          // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người.
-          // Thiếu dòng này, một bài không resolve được bị ghi vào `radio_feedback`
-          // thành "người dùng bỏ qua" — vĩnh viễn, theo tài khoản, không đường gỡ.
+          // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người;
+          // nếu thiếu, bài lỗi bị coi là skip chủ động và chặn lại trong phiên.
           radioEngine.noteError(current.id);
           // `playTrackAt` trong `next()` tự xoá lỗi và phát tiếp.
           after.next();

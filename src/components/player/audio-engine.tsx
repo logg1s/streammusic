@@ -456,9 +456,8 @@ export function AudioEngine() {
         return;
       }
 
-      // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người. Thiếu
-      // dòng này thì một kho lưu trữ hết hạn cấp quyền bị ghi vào `radio_feedback`
-      // thành một loạt "người dùng bỏ qua" — vĩnh viễn, theo tài khoản, không đường gỡ.
+      // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người. Nếu
+      // thiếu, bài lỗi bị coi là skip chủ động và bị chặn lại trong radio session.
       radioEngine.noteError(current.id);
       store.next();
     },

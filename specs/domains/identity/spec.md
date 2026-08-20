@@ -16,7 +16,9 @@ authorized storage and optional YouTube accounts without crossing ownership boun
 - User-owned records are read or mutated only after resolving the current user ID.
 - Provider access and refresh tokens are encrypted before database persistence.
 - A native handoff code can be exchanged at most once and expires after 120 seconds.
-- A TV pairing challenge exposes only a short user code, stores the high-entropy device credential as a hash, and mints no session before authenticated approval.
+- A device-pairing challenge exposes only a short user code, stores the high-entropy
+  target credential as a hash, binds it to TV or web, and mints no session before
+  authenticated phone approval.
 
 ## Requirements
 
@@ -93,15 +95,20 @@ possible, and marked as needing reauthorization when refresh can no longer recov
 - Code/schema-confirmed: [connection lifecycle](../../../src/lib/connections.ts), [provider contract](../../../src/lib/providers/types.ts), [YouTube account lifecycle](../../../src/lib/youtube/account.ts), and [database schema](../../../src/db/schema.ts).
 - Test gap: real provider OAuth/refresh flows were not executed during adoption.
 
-## `IDENTITY-005` — Limited-input TV pairing
+## `IDENTITY-005` — Phone-assisted device pairing
 
 ### Rule
 
-A signed-out TV requests a ten-minute pairing challenge and displays its short user
-code plus the Vong verification address. A listener signs in on a separate browser,
-confirms that code, and the TV polls with its high-entropy device credential. The
-database stores only the credential hash, and successful exchange deletes the
-approved record atomically before issuing the standard native bearer session.
+A signed-out TV or desktop web browser requests a ten-minute target-bound pairing
+challenge and displays its short code, a QR containing the complete Vong verification
+URL, and the manual verification address. On a phone, the listener scans the QR or
+enters the code, signs in, sees which target requested access, and explicitly confirms
+it. The target polls with its high-entropy credential, which never appears in QR or
+UI. The database stores only its hash, and successful exchange atomically deletes the
+approved record before issuing a native bearer session to TV or a Secure, HttpOnly,
+SameSite web session cookie to the requesting browser. Existing Google web sign-in
+and legacy `/tv` verification links remain available.
+
 Challenge creation is atomically bounded per client and globally in one-minute
 database-backed windows; raw client addresses are not stored.
 
@@ -111,11 +118,13 @@ database-backed windows; raw client addresses are not stored.
 - `AC-IDENTITY-005-02`: Given an authenticated listener approves the displayed code, when the matching TV next polls, then it receives the approving listener's native session.
 - `AC-IDENTITY-005-03`: Given an approved challenge has already been exchanged, when the device credential is replayed, then no second session is issued.
 - `AC-IDENTITY-005-04`: Given repeated unauthenticated challenge starts, when the per-client or global minute budget is exhausted, then no additional challenge row is created and the endpoint returns a retryable 429.
+- `AC-IDENTITY-005-05`: Given a TV or web challenge, when its QR is inspected, then it contains only the public `/pair` URL and short code, while consuming through the other target type issues no session and leaves the valid challenge available.
+- `AC-IDENTITY-005-06`: Given an approved web challenge, when the originating browser consumes it, then the session is returned only as a secure HttpOnly cookie and the internal callback path is restored.
 
 ### Evidence
 
-- Code-confirmed: [TV pairing service](../../../src/lib/tv-pairing.ts), [pairing page](../../../src/app/tv/page.tsx), and TV native routes.
-- Unit-test-confirmed: [TV pairing tests](../../../src/lib/tv-pairing.test.ts) cover hashing, approval, expiry, unknown credentials, unapproved polling, concurrent consume, replay denial, and per-client throttling.
+- Code-confirmed: [pairing service](../../../src/lib/tv-pairing.ts), [phone approval page](../../../src/app/pair/page.tsx), web pairing routes, legacy TV redirect, and TV native routes.
+- Unit-test-confirmed: [pairing tests](../../../src/lib/tv-pairing.test.ts) cover hashing, target inspection/binding, approval, expiry, unknown credentials, unapproved polling, concurrent consume, replay denial, and throttling; route tests cover QR secrecy and web cookie attributes.
 
 ## Connections
 

@@ -41,7 +41,7 @@ export interface RadioEngine {
   /**
    * Đánh dấu lượt nghe hiện tại kết thúc vì LỖI, không phải vì người dùng.
    * Vỏ phải gọi cái này ngay trước khi tự nhảy bài trên đường xử lý lỗi — nếu không,
-   * cú nhảy đó bị ghi thành "người dùng không thích bài này", vĩnh viễn.
+   * cú nhảy đó bị xem như skip chủ động và tạo tombstone sai trong phiên.
    */
   noteError(trackId: string): void;
   /** Chỉ dùng cho test/gỡ lỗi. */

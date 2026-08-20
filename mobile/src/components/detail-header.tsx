@@ -32,7 +32,7 @@ export function DetailHeader({
       <Artwork
         url={coverUrl}
         name={title}
-        size={120}
+        size={132}
         rounded={round ? "full" : "lg"}
       />
       <View style={styles.meta}>
@@ -55,8 +55,8 @@ export function DetailHeader({
 const styles = StyleSheet.create({
   root: {
     flexDirection: "row",
-    gap: spacing.lg,
-    marginBottom: spacing.xl,
+    gap: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   meta: {
     flex: 1,
@@ -65,8 +65,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: font.xl,
-    fontWeight: "700",
+    fontSize: font.xxl,
+    fontWeight: "800",
   },
   subtitle: {
     color: colors.subtle,

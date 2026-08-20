@@ -46,8 +46,9 @@ adb logcat -d -t 800 | grep -E "ReactNativeJS|VongAudio|ExoPlayer|MediaSession"
 ```
 
 Hard invariant to re-verify after touching `mobile/modules/vong-audio`:
-googlevideo 403s any request without `Range:` ≤ 1 MiB —
-`RangeForcingDataSource.kt` enforces it; a 403 in logcat means it regressed.
+every googlevideo byte request carries `Range: bytes=N-` (or a tighter
+range added by the HTTP stack). `RangeForcingDataSource.kt` enforces the
+fallback header; missing Range causes severe throttling and can break seeking.
 
 ## Known failure modes
 

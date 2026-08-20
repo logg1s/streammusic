@@ -136,7 +136,7 @@ export function NativeAudioEngine() {
         // WebView2 vẫn áp CORS, nên request InnerTube phải đi qua Rust (`plugin-http`).
         resolverRef.current ??= createYoutubeResolver(await tauriFetch());
         const audio = await resolverRef.current.resolve(item.youtubeVideoId);
-        // Rust tự gắn `Range: bytes=<start>-` (không có header đó googlevideo bóp băng
+        // Rust tự gắn `Range: bytes=N-` (không có header đó googlevideo bóp băng
         // thông còn ~32 KiB/s) và tự đọc độ dài/khuôn từ header của response.
         await invoke("play_track", {
           track: {
@@ -258,10 +258,8 @@ export function NativeAudioEngine() {
           item &&
           peekNextTrack()
         ) {
-          // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người.
-          // Thiếu dòng này thì mỗi bài không phát được bị ghi vào `radio_feedback`
-          // thành một cú skip vĩnh viễn — vỏ Windows trước nay sạch chuyện đó chỉ vì
-          // nó không hề tự nhảy bài, và đúng dòng này là thứ vừa lấy mất sự sạch đó.
+          // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người;
+          // nếu thiếu, bài lỗi bị coi là skip chủ động và chặn lại trong phiên.
           radioEngine.noteError(item.id);
           after.next();
         }

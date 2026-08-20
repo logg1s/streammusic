@@ -10,8 +10,8 @@ import { playerStore } from "@/store/player";
  *
  * Là singleton cấp module chứ không nằm trong `RadioController`, vì các engine phát
  * nhạc cũng cần chạm tới nó: khi một bài không phát được và engine tự nhảy bài, nó
- * PHẢI báo `noteError` trước, nếu không cú nhảy đó bị ghi thành "người dùng không
- * thích bài này" — vĩnh viễn, theo tài khoản, không có đường gỡ.
+ * PHẢI báo `noteError` trước, nếu không cú nhảy đó bị coi là skip chủ động và tạo
+ * tombstone sai trong radio session hiện tại.
  */
 export const radioEngine = createRadioEngine(playerStore, radioClient, {
   // Store không phân biệt được radio tự bật với radio do người dùng bấm, mà đó lại

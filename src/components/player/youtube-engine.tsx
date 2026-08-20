@@ -108,10 +108,9 @@ export function YouTubeEngine() {
   /**
    * Số bài lỗi liên tiếp. Về 0 chỉ khi player báo PLAYING — tức là đã ra tiếng thật.
    *
-   * Trần này thiếu ở đây trong khi vỏ Windows và Android đều đã có. Hậu quả không phải
-   * lý thuyết: `onError` tự nhảy bài, nên một quãng mạng kém đi hết hàng đợi trong vài
-   * giây và ghi `reportBlocked` cho MỌI video nó lướt qua — tức là dạy sai mô hình gợi
-   * ý ở quy mô lớn, đúng thứ mà `noteError` ngay bên dưới sinh ra để chặn.
+   * Trần này thiếu ở đây trong khi vỏ Windows và Android đều đã có. Nếu `onError` tự
+   * nhảy liên tục trong lúc mạng kém, nó có thể đi hết hàng đợi và chặn nhầm mọi video
+   * đã lướt qua trong session; `noteError` bên dưới ngăn lỗi máy bị coi là skip chủ động.
    */
   const failuresRef = useRef(0);
 
@@ -225,18 +224,15 @@ export function YouTubeEngine() {
             const current = peekCurrentTrack();
             if (current?.source !== "youtube" || !current.youtubeVideoId)
               return;
-            // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người.
-            // Thiếu dòng này thì mỗi lỗi nhúng ghi 2 skip video + 2 skip nghệ sĩ vào
-            // `radio_feedback` — đủ để xoá vĩnh viễn một nghệ sĩ khỏi mọi radio tương
-            // lai chỉ từ MỘT video hỏng. Một phiên mạng kém từng đốt 47 video và 7
-            // nghệ sĩ của tài khoản chính trong 63 giây theo đúng cách này.
+            // Đánh dấu TRƯỚC khi nhảy: cú nhảy này là của máy, không phải của người;
+            // nếu thiếu, bài lỗi bị coi là skip chủ động và chặn lại trong phiên.
             radioEngine.noteError(current.id);
             failuresRef.current += 1;
             // Chạm trần thì dừng hẳn — và KHÔNG `reportBlocked`. Quá ngần này bài liên
             // tiếp hỏng thì nguyên nhân gần như chắc chắn là phía mình (mất mạng, sập
             // iframe API), không phải video bị chặn; ghi tiếp là vu oan cho cả một lô.
             if (failuresRef.current >= MAX_CONSECUTIVE_FAILURES) return;
-            reportBlocked(current.youtubeVideoId, current.artistName);
+            reportBlocked(current.youtubeVideoId);
             usePlayer.getState().next();
           },
         },

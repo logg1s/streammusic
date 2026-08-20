@@ -14,9 +14,9 @@
 */
 :root {
   --background: #ffffff;
-  --surface: #fafafa;
-  --surface-hover: #f4f4f5;
-  --border: #e4e4e7;
+  --surface: #f7f7f6;
+  --surface-hover: #eeeeec;
+  --border: #dededb;
 
   --foreground: #09090b;
   /* Hai bậc chữ phụ, cả hai đều phải đạt tối thiểu 4.5:1 trên nền trắng.
@@ -27,31 +27,31 @@
   /* Màu nhấn hồng (rose), đồng bộ với app Android. --accent là màu NỀN của nút; dùng
      làm chữ thì tương phản không đạt AA, nên --accent-text là biến thể riêng cho chữ.
      Ở nền sáng phải đậm hơn để đạt AA (#be123c ~5.9:1 trên trắng). */
-  --accent: #e11d48;
-  --accent-hover: #be123c;
+  --accent: #e44843;
+  --accent-hover: #c83733;
   --accent-foreground: #ffffff;
-  --accent-text: #be123c;
+  --accent-text: #c83733;
 
   --danger: #dc2626;
 }
 
 .dark {
-  /* Thang nền tối trùng khít app Android (theme.ts) để hai vỏ nhìn là một. */
-  --background: #0b0b0f;
-  --surface: #16161d;
-  --surface-hover: #1f1f29;
-  --border: #27272a;
+  /* Nền than trung tính và san hô là hệ nhận diện chung của web/Android/TV. */
+  --background: #090a0c;
+  --surface: #121417;
+  --surface-hover: #1b1e22;
+  --border: #292c31;
 
-  --foreground: #f4f4f5;
-  --muted-foreground: #a1a1aa;
+  --foreground: #f5f5f4;
+  --muted-foreground: #a5a7ad;
   /* #71717a chỉ đạt 4.12 trên nền tối — dưới chuẩn AA cho chữ thường. */
-  --subtle: #8a8a94;
+  --subtle: #858891;
 
-  --accent: #f43f5e;
-  --accent-hover: #fb7185;
+  --accent: #ff625c;
+  --accent-hover: #ff817b;
   --accent-foreground: #ffffff;
   /* Hồng nhạt (rose-300) làm chữ trên nền tối, tương phản cao. */
-  --accent-text: #fda4af;
+  --accent-text: #ff817b;
 
   --danger: #f87171;
 }
@@ -87,6 +87,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* Số liệu (thời lượng, số thứ tự bài) dùng chữ số đều bề rộng để cột thẳng hàng. */
@@ -117,8 +118,8 @@ body {
 
 :focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 
 /* Thanh cuộn hoà vào nền thay vì cắt ngang bố cục. */

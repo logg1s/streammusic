@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import type { PlayableTrack } from "@vong/shared";
 import { Artwork } from "@/components/artwork";
@@ -108,15 +110,15 @@ function TvPairing() {
     <View style={styles.pairingScreen}>
       <Image
         source={require("../../assets/vong-wordmark.png")}
-        style={{ width: 360, height: 100 }}
+        style={{ width: 190, height: 54 }}
         contentFit="contain"
       />
       <View style={styles.pairingCard}>
         <Text style={styles.eyebrow}>ANDROID TV</Text>
         <Text style={styles.pairingTitle}>Ghép nối với tài khoản Vọng</Text>
         <Text style={styles.pairingBody}>
-          Mở địa chỉ dưới đây trên điện thoại hoặc máy tính, đăng nhập rồi nhập
-          mã đang hiện trên TV.
+          Quét QR bằng điện thoại để mở mã tự động, hoặc vào địa chỉ bên dưới và
+          nhập mã thủ công. Sau đó đăng nhập và xác nhận TV này.
         </Text>
 
         {status === "starting" ? (
@@ -125,23 +127,37 @@ function TvPairing() {
             <Text style={styles.mutedText}>Đang tạo mã an toàn…</Text>
           </View>
         ) : challenge ? (
-          <>
-            <Text style={styles.pairingUri}>
-              {challenge.verificationUri.replace(/^https?:\/\//, "")}
-            </Text>
-            <Text
-              accessibilityLabel={`Mã ghép nối ${challenge.displayCode}`}
-              style={styles.pairingCode}
-            >
-              {challenge.displayCode}
-            </Text>
-            {status === "waiting" ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.accent} />
-                <Text style={styles.mutedText}>Đang chờ xác nhận…</Text>
-              </View>
-            ) : null}
-          </>
+          <View style={styles.pairingOptions}>
+            <View style={styles.qrFrame}>
+              <Image
+                source={{ uri: challenge.qrImageUri }}
+                accessibilityLabel={`QR ghép nối mã ${challenge.displayCode}`}
+                style={styles.qrImage}
+                contentFit="contain"
+              />
+            </View>
+            <View style={styles.pairingDetails}>
+              <Text style={styles.pairingHint}>HOẶC NHẬP MÃ TRÊN ĐIỆN THOẠI</Text>
+              <Text
+                accessibilityLabel={`Mã ghép nối ${challenge.displayCode}`}
+                style={styles.pairingCode}
+              >
+                {challenge.displayCode}
+              </Text>
+              <Text style={styles.pairingUri}>
+                {challenge.verificationUri.replace(/^https?:\/\//, "")}
+              </Text>
+              {status === "waiting" ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={colors.accent} />
+                  <Text style={styles.mutedText}>Đang chờ điện thoại xác nhận…</Text>
+                </View>
+              ) : null}
+              {status === "expired" ? (
+                <Text style={styles.errorText}>Mã đã hết hạn.</Text>
+              ) : null}
+            </View>
+          </View>
         ) : null}
 
         {message ? <Text style={styles.errorText}>{message}</Text> : null}
@@ -159,13 +175,15 @@ function TvPairing() {
 
 function TvShell() {
   const [section, setSection] = useState<Section>("home");
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const currentTrack = useCurrentTrack();
 
   return (
     <View style={styles.shell}>
       <View style={styles.sidebar}>
         <Image
           source={require("../../assets/vong-wordmark.png")}
-          style={{ width: 184, height: 50, marginBottom: 54 }}
+          style={{ width: 96, height: 32, marginBottom: 28 }}
           contentFit="contain"
         />
         <View style={styles.navList}>
@@ -173,17 +191,33 @@ function TvShell() {
             <TvButton
               key={item.key}
               label={item.label}
-              selected={section === item.key}
+              selected={!playerOpen && section === item.key}
               preferredFocus={index === 0}
-              onPress={() => setSection(item.key)}
+              onPress={() => {
+                setSection(item.key);
+                setPlayerOpen(false);
+              }}
             />
           ))}
+          {currentTrack ? (
+            <TvButton
+              label="Đang phát"
+              selected={playerOpen}
+              onPress={() => setPlayerOpen(true)}
+            />
+          ) : null}
         </View>
       </View>
 
       <View style={styles.main}>
-        <TvContent section={section} />
-        <TvPlayerBar />
+        {playerOpen ? (
+          <TvNowPlaying onClose={() => setPlayerOpen(false)} />
+        ) : (
+          <>
+            <TvContent section={section} />
+            <TvPlayerBar onOpen={() => setPlayerOpen(true)} />
+          </>
+        )}
       </View>
     </View>
   );
@@ -455,7 +489,7 @@ function TvTrackCard({
         active && styles.activeCard,
       ]}
     >
-      <Artwork url={track.coverUrl} name={track.title} size={96} rounded="lg" />
+      <Artwork url={track.coverUrl} name={track.title} size={72} rounded="lg" />
       <View style={styles.trackCopy}>
         <Text numberOfLines={1} style={styles.trackTitle}>
           {track.title}
@@ -470,7 +504,159 @@ function TvTrackCard({
   );
 }
 
-function TvPlayerBar() {
+function tvTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
+  const total = Math.floor(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function TvNowPlaying({ onClose }: { onClose: () => void }) {
+  const track = useCurrentTrack();
+  const queue = usePlayer((state) => state.queue);
+  const order = usePlayer((state) => state.order);
+  const position = usePlayer((state) => state.position);
+  const currentTime = usePlayer((state) => state.currentTime);
+  const duration = usePlayer((state) => state.duration);
+  const isPlaying = usePlayer((state) => state.isPlaying);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      onClose();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [onClose]);
+
+  if (!track) return <TvScroller title="Đang phát"><Text style={styles.emptyText}>Chưa chọn bài nào.</Text></TvScroller>;
+
+  const upcoming = order
+    .map((queueIndex, orderPosition) => ({
+      orderPosition,
+      track: queue[queueIndex],
+    }))
+    .filter(
+      (item): item is { orderPosition: number; track: PlayableTrack } =>
+        Boolean(item.track) && item.orderPosition > position,
+    );
+  const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+
+  return (
+    <View style={styles.tvPlayerScreen}>
+      <View style={styles.tvPlayerMain}>
+        <View style={styles.tvPlayerHeadingRow}>
+          <Text style={styles.tvPlayerHeading}>Đang phát</Text>
+          <TvButton label="Đóng" onPress={onClose} />
+        </View>
+        <View style={styles.tvHeroRow}>
+          <Artwork url={track.coverUrl} name={track.title} size={218} rounded="lg" />
+          <View style={styles.tvHeroMeta}>
+            <Text numberOfLines={3} style={styles.tvHeroTitle}>{track.title}</Text>
+            <Text numberOfLines={1} style={styles.tvHeroArtist}>
+              {track.artistName ?? "Không rõ nghệ sĩ"}
+            </Text>
+            <Text style={styles.tvTime}>{tvTime(currentTime)} / {tvTime(duration)}</Text>
+            <View style={styles.tvProgressTrack}>
+              <View style={[styles.tvProgressFill, { width: `${progress * 100}%` }]} />
+            </View>
+          </View>
+        </View>
+        <View style={styles.tvTransport}>
+          <TvIconButton label="Bài trước" icon="play-skip-back" onPress={() => usePlayer.getState().previous()} />
+          <TvIconButton label="Lùi 10 giây" icon="play-back" onPress={() => usePlayer.getState().seek(currentTime - 10)} />
+          <TvIconButton
+            label={isPlaying ? "Tạm dừng" : "Phát"}
+            icon={isPlaying ? "pause" : "play"}
+            selected
+            onPress={() => usePlayer.getState().toggle()}
+          />
+          <TvIconButton label="Tiến 10 giây" icon="play-forward" onPress={() => usePlayer.getState().seek(currentTime + 10)} />
+          <TvIconButton label="Bài sau" icon="play-skip-forward" onPress={() => usePlayer.getState().next()} />
+        </View>
+      </View>
+
+      <View style={styles.tvQueuePane}>
+        <Text style={styles.tvQueueHeading}>Hàng đợi</Text>
+        <Text style={styles.tvQueueSection}>Tiếp theo</Text>
+        <ScrollView contentContainerStyle={styles.tvQueueList}>
+          {upcoming.length === 0 ? (
+            <Text style={styles.emptyText}>Chưa có bài nào phía sau.</Text>
+          ) : (
+            upcoming.map((item, index) => (
+              <TvQueueRow
+                key={`${item.orderPosition}:${item.track.id}`}
+                item={item}
+                preferredFocus={index === 0}
+              />
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
+function TvQueueRow({
+  item,
+  preferredFocus,
+}: {
+  item: { orderPosition: number; track: PlayableTrack };
+  preferredFocus: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Phát ${item.track.title}`}
+      hasTVPreferredFocus={preferredFocus}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onPress={() => usePlayer.getState().playTrackAt(item.orderPosition)}
+      style={[styles.tvQueueRow, focused && styles.tvQueueRowFocused]}
+    >
+      <Artwork url={item.track.coverUrl} name={item.track.title} size={54} rounded="md" />
+      <Text style={styles.tvQueueNumber}>{item.orderPosition + 1}</Text>
+      <View style={styles.tvQueueCopy}>
+        <Text numberOfLines={1} style={styles.tvQueueTitle}>{item.track.title}</Text>
+        <Text numberOfLines={1} style={styles.tvQueueArtist}>
+          {item.track.artistName ?? "Không rõ nghệ sĩ"}
+        </Text>
+      </View>
+      <Ionicons name="ellipsis-vertical" size={22} color={colors.muted} />
+    </Pressable>
+  );
+}
+
+function TvIconButton({
+  label,
+  icon,
+  onPress,
+  selected = false,
+}: {
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  onPress: () => void;
+  selected?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onPress={onPress}
+      style={[
+        styles.tvIconButton,
+        selected && styles.tvIconButtonSelected,
+        focused && styles.tvIconButtonFocused,
+      ]}
+    >
+      <Ionicons name={icon} size={28} color={selected ? onAccent : colors.text} />
+    </Pressable>
+  );
+}
+
+function TvPlayerBar({ onOpen }: { onOpen: () => void }) {
   const track = useCurrentTrack();
   const isPlaying = usePlayer((state) => state.isPlaying);
   const currentTime = usePlayer((state) => state.currentTime);
@@ -478,15 +664,18 @@ function TvPlayerBar() {
   if (!track) return null;
   return (
     <View style={styles.playerBar}>
-      <Artwork url={track.coverUrl} name={track.title} size={64} rounded="md" />
-      <View style={styles.playerCopy}>
-        <Text numberOfLines={1} style={styles.playerTitle}>
-          {track.title}
-        </Text>
+      <Artwork url={track.coverUrl} name={track.title} size={48} rounded="md" />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Mở trình phát và hàng đợi: ${track.title}`}
+        onPress={onOpen}
+        style={styles.playerCopy}
+      >
+        <Text numberOfLines={1} style={styles.playerTitle}>{track.title}</Text>
         <Text numberOfLines={1} style={styles.trackArtist}>
           {track.artistName ?? "Không rõ nghệ sĩ"}
         </Text>
-      </View>
+      </Pressable>
       <View style={styles.playerControls}>
         <TvButton
           label="−10 giây"
@@ -506,6 +695,7 @@ function TvPlayerBar() {
           label="+10 giây"
           onPress={() => usePlayer.getState().seek(currentTime + 10)}
         />
+        <TvButton label="Hàng đợi" onPress={onOpen} />
       </View>
     </View>
   );
@@ -556,84 +746,105 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 96,
-    padding: 72,
+    gap: 48,
+    padding: 48,
     backgroundColor: colors.bg,
   },
   pairingCard: {
-    width: 680,
-    padding: 48,
+    width: 720,
+    padding: 32,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 28,
+    borderRadius: radius.xl,
     backgroundColor: colors.surface,
   },
   eyebrow: {
     color: colors.accentText,
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
-    letterSpacing: 3,
+    letterSpacing: 2.4,
   },
   pairingTitle: {
-    marginTop: 16,
+    marginTop: 10,
     color: colors.text,
-    fontSize: 42,
-    fontWeight: "700",
+    fontSize: 29,
+    fontWeight: "800",
   },
   pairingBody: {
-    marginTop: 18,
+    marginTop: 12,
     color: colors.muted,
-    fontSize: 22,
-    lineHeight: 32,
+    fontSize: 18,
+    lineHeight: 26,
   },
   pairingUri: {
-    marginTop: 36,
-    color: colors.text,
-    fontSize: 25,
+    marginTop: 14,
+    color: colors.muted,
+    fontSize: 18,
     fontWeight: "600",
   },
+  pairingOptions: {
+    marginTop: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 28,
+  },
+  qrFrame: {
+    width: 210,
+    height: 210,
+    padding: 10,
+    borderRadius: radius.lg,
+    backgroundColor: "#ffffff",
+  },
+  qrImage: { width: 190, height: 190 },
+  pairingDetails: { flex: 1 },
+  pairingHint: {
+    color: colors.subtle,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+  },
   pairingCode: {
-    marginTop: 16,
+    marginTop: 8,
     color: colors.accentText,
-    fontSize: 58,
+    fontSize: 42,
     fontWeight: "800",
     letterSpacing: 5,
   },
   shell: { flex: 1, flexDirection: "row", backgroundColor: colors.bg },
   sidebar: {
-    width: 290,
-    paddingHorizontal: 28,
-    paddingVertical: 36,
+    width: 136,
+    paddingHorizontal: 14,
+    paddingVertical: 24,
     borderRightWidth: 1,
     borderRightColor: colors.border,
     backgroundColor: colors.surface,
   },
-  navList: { gap: 14 },
+  navList: { gap: 8 },
   main: { flex: 1 },
   scroller: { flex: 1 },
-  scrollerContent: { paddingHorizontal: 52, paddingTop: 38 },
+  scrollerContent: { paddingHorizontal: 34, paddingTop: 28 },
   pageTitle: {
     color: colors.text,
-    fontSize: 42,
-    fontWeight: "700",
-    marginBottom: 32,
+    fontSize: 34,
+    fontWeight: "800",
+    marginBottom: 24,
   },
-  section: { marginBottom: 44 },
+  section: { marginBottom: 32 },
   sectionTitle: {
     color: colors.text,
-    fontSize: 25,
+    fontSize: 22,
     fontWeight: "700",
     marginBottom: 18,
   },
-  trackGrid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
+  trackGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   trackCard: {
-    width: 420,
-    minHeight: 120,
+    width: 316,
+    minHeight: 92,
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
     padding: 12,
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: "transparent",
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
@@ -641,7 +852,7 @@ const styles = StyleSheet.create({
   focused: {
     borderColor: colors.accent,
     backgroundColor: colors.surfaceElevated,
-    transform: [{ scale: 1.04 }],
+    transform: [{ scale: 1.035 }],
   },
   activeCard: { backgroundColor: colors.accentSoft },
   trackCopy: { flex: 1 },
@@ -659,18 +870,18 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontSize: 18, lineHeight: 26 },
   errorRow: { alignItems: "flex-start", gap: 14, marginBottom: 16 },
   button: {
-    minHeight: 52,
+    minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 22,
-    borderWidth: 3,
+    paddingHorizontal: 14,
+    borderWidth: 2,
     borderColor: "transparent",
     borderRadius: radius.md,
     backgroundColor: colors.surfaceElevated,
   },
-  buttonSelected: { backgroundColor: colors.accent },
-  buttonText: { color: colors.text, fontSize: 18, fontWeight: "600" },
-  buttonTextSelected: { color: onAccent },
+  buttonSelected: { backgroundColor: colors.accentSoft },
+  buttonText: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  buttonTextSelected: { color: colors.accentText },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -696,23 +907,114 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: "flex-start",
   },
+  tvPlayerScreen: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 20,
+    padding: 26,
+    backgroundColor: colors.bg,
+  },
+  tvPlayerMain: { flex: 1, minWidth: 0 },
+  tvPlayerHeadingRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  tvPlayerHeading: { color: colors.text, fontSize: 30, fontWeight: "800" },
+  tvHeroRow: { flexDirection: "row", alignItems: "center", gap: 24 },
+  tvHeroMeta: { flex: 1, minWidth: 0 },
+  tvHeroTitle: {
+    color: colors.text,
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: "800",
+  },
+  tvHeroArtist: { marginTop: 14, color: colors.muted, fontSize: 20 },
+  tvTime: {
+    marginTop: 28,
+    color: colors.muted,
+    fontSize: 17,
+    fontVariant: ["tabular-nums"],
+  },
+  tvProgressTrack: {
+    height: 5,
+    marginTop: 10,
+    overflow: "hidden",
+    borderRadius: radius.full,
+    backgroundColor: colors.borderStrong,
+  },
+  tvProgressFill: { height: "100%", borderRadius: radius.full, backgroundColor: colors.accent },
+  tvTransport: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 26,
+  },
+  tvIconButton: {
+    width: 66,
+    height: 58,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceElevated,
+  },
+  tvIconButtonSelected: { backgroundColor: colors.accent },
+  tvIconButtonFocused: {
+    borderColor: colors.accentText,
+    transform: [{ scale: 1.06 }],
+  },
+  tvQueuePane: {
+    width: 310,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  tvQueueHeading: { color: colors.text, fontSize: 28, fontWeight: "800" },
+  tvQueueSection: { marginTop: 22, marginBottom: 10, color: colors.muted, fontSize: 18, fontWeight: "700" },
+  tvQueueList: { gap: 8, paddingBottom: 20 },
+  tvQueueRow: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+    borderRadius: radius.md,
+  },
+  tvQueueRowFocused: {
+    borderColor: colors.accent,
+    backgroundColor: colors.surfaceElevated,
+    transform: [{ scale: 1.025 }],
+  },
+  tvQueueNumber: { width: 18, color: colors.subtle, fontSize: 17, fontWeight: "700", textAlign: "center" },
+  tvQueueCopy: { flex: 1, minWidth: 0 },
+  tvQueueTitle: { color: colors.text, fontSize: 17, fontWeight: "700" },
+  tvQueueArtist: { marginTop: 4, color: colors.muted, fontSize: 14 },
   playerBar: {
-    height: 94,
+    height: 76,
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
-    paddingHorizontal: 26,
+    paddingHorizontal: 18,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.surface,
   },
-  playerCopy: { width: 280 },
-  playerTitle: { color: colors.text, fontSize: 19, fontWeight: "700" },
+  playerCopy: { width: 240, minHeight: 52, justifyContent: "center" },
+  playerTitle: { color: colors.text, fontSize: 17, fontWeight: "700" },
   playerControls: {
     flex: 1,
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 12,
+    gap: 8,
   },
   scrollFooter: { height: 44 },
 });
