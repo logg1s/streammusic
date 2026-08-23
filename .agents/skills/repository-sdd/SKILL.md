@@ -55,6 +55,8 @@ plausible product policy.
 
 Keep one writer per working copy. Read [orchestration.md](references/orchestration.md)
 only when independent exploration, noisy analysis, or read-only review would help.
+Use a stable responsible person, team, or workstream as Owner; do not use the
+executing agent's temporary label.
 
 ## Keep current truth compact
 
@@ -81,6 +83,8 @@ only when independent exploration, noisy analysis, or read-only review would hel
    before application commands; on success it runs the configured lane once and
    atomically finalizes the batch. Do not run standalone `verify.py` or the configured
    full command immediately beforehand.
+   When one user request produces several independent cards in one cohesive delivery,
+   keep them verified and finalize that batch once. Do not batch unrelated requests.
 
 Read [verification.md](references/verification.md) only for diagnosis, a card that
 must remain open, parallel handoff, readiness without lifecycle transition, or a failed

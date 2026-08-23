@@ -45,6 +45,8 @@ decision-owner approval before implementation, configured repository verificatio
 risk-specific local evidence, and a newly started read-only reviewer after
 implementation. Before implementation, give one concise warning that names the
 material risk, affected boundary, recovery path, and exact decision requested.
+Blanket approval is insufficient: record the exact approved action and target,
+affected boundary, accepted recovery path, Decision-Owner identity, and approval date.
 An empty `verification.critical` means there is no extra configured command; it
 does not waive targeted checks or evidence for the material risks. Completed
 Critical cards record passing Outcome and Experience evidence plus at least one

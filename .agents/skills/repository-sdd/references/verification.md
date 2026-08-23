@@ -39,6 +39,10 @@ For a local single-card change that is already integrated, the lean finish is:
    card to `verified`;
 3. run `python scripts/finalize_change.py --all` once.
 
+If one user request created several independent cards that ship as one cohesive
+delivery, leave them verified until integration and finalize the batch once. Do not
+hold unrelated requests merely to make a larger batch.
+
 Do not insert a standalone `verify.py` or invoke the configured full-lane command
 directly between steps 2 and 3. The finalizer first runs structural completion; if
 that fails, no application command or lifecycle mutation occurs. It then owns the

@@ -48,6 +48,7 @@ MACHINE_LOCAL_PATH = re.compile(
 )
 
 DOMAIN_METADATA = ("Spec-ID", "Owner", "Status", "Last-Reviewed")
+LIVE_MAP_METADATA = ("Owner", "Status", "Last-Reviewed")
 DOMAIN_REQUIREMENT_WARNING_LIMIT = 25
 DOMAIN_TEXT_WARNING_LIMIT = 40_000
 STANDARD_CHANGE_METADATA = (
@@ -442,6 +443,42 @@ def validate_domain_specs(
     return set(declared), spec_ids, set(declared_acceptance)
 
 
+def validate_live_maps(root: Path, report: Report, require_resolved: bool) -> None:
+    if not require_resolved:
+        return
+    for relative in (
+        Path("specs/product.md"),
+        Path("specs/architecture/system.md"),
+    ):
+        path = root / relative
+        if not path.is_file():
+            report.errors.append(f"{relative.as_posix()}: missing before adoption")
+            continue
+        raw_text = read_utf8(path, root, report)
+        if raw_text is None:
+            continue
+        text = without_fenced_blocks(raw_text)
+        if is_placeholder(text):
+            report.errors.append(
+                f"{relative.as_posix()}: unresolved live placeholder before adoption"
+            )
+        values = metadata(text, LIVE_MAP_METADATA)
+        for key in LIVE_MAP_METADATA:
+            count = metadata_count(text, key)
+            if count > 1:
+                report.errors.append(
+                    f"{relative.as_posix()}: duplicate header metadata {key}"
+                )
+            elif key not in values or is_placeholder(values.get(key, "")):
+                report.errors.append(
+                    f"{relative.as_posix()}: missing or placeholder {key}"
+                )
+        if values.get("Status", "").lower() != "current":
+            report.errors.append(
+                f"{relative.as_posix()}: Status must be current after adoption"
+            )
+
+
 def validate_affected_refs(
     value: str,
     relative: Path,
@@ -673,9 +710,24 @@ def validate_changes(
                         row[1],
                     )
                 ]
-                outcome_rows = [
+                unsupported_rows = [
                     row
                     for row in passing_rows
+                    if len(row) < 3
+                    or not row[2]
+                    or is_placeholder(row[2])
+                ]
+                for row in unsupported_rows:
+                    label = row[0] if row else "verification"
+                    report.errors.append(
+                        f"{relative}: passing '{label}' row requires a resolved Evidence column"
+                    )
+                supported_rows = [
+                    row for row in passing_rows if row not in unsupported_rows
+                ]
+                outcome_rows = [
+                    row
+                    for row in supported_rows
                     if row and re.match(r"^outcome\s*:", row[0])
                 ]
                 uncovered_acceptance = sorted(
@@ -692,7 +744,7 @@ def validate_changes(
                     )
                 experience_rows = [
                     row
-                    for row in passing_rows
+                    for row in supported_rows
                     if row and re.match(r"^experience\s*:", row[0])
                 ]
                 if not experience_rows:
@@ -722,6 +774,47 @@ def validate_changes(
                 report.errors.append(
                     f"{relative}: Critical status {status} requires 'Decision: approved ...'"
                 )
+            if status in (OPEN_STATUSES - {"draft"}):
+                approval_fields = {
+                    label: re.search(
+                        rf"^-\s*{re.escape(label)}:\s*(.+)$",
+                        review,
+                        re.MULTILINE | re.IGNORECASE,
+                    )
+                    for label in (
+                        "Approved action",
+                        "Affected boundary",
+                        "Recovery accepted",
+                        "Approval record",
+                    )
+                }
+                for label, match in approval_fields.items():
+                    value = match.group(1).strip() if match else ""
+                    if (
+                        not value
+                        or is_placeholder(value)
+                        or re.match(r"^(?:pending|not recorded)\b", value, re.IGNORECASE)
+                    ):
+                        report.errors.append(
+                            f"{relative}: open Critical work requires resolved '{label}' approval detail"
+                        )
+                approval_record = approval_fields["Approval record"]
+                approval_value = (
+                    approval_record.group(1).strip() if approval_record else ""
+                )
+                decision_owner = values.get("Decision-Owner", "")
+                if (
+                    approval_value
+                    and not is_placeholder(approval_value)
+                    and (
+                        not re.search(r"\b\d{4}-\d{2}-\d{2}\b", approval_value)
+                        or decision_owner.lower() not in approval_value.lower()
+                    )
+                ):
+                    report.errors.append(
+                        f"{relative}: Approval record must name Decision-Owner "
+                        f"'{decision_owner}' and an approval date YYYY-MM-DD"
+                    )
             risks = change_section(text, "Risks")
             recovery = change_section(text, "Rollout and Recovery")
             if status in resolved_statuses and is_placeholder(risks):
@@ -1086,6 +1179,7 @@ def validate_repository(
     requirement_ids, spec_ids, acceptance_ids = validate_domain_specs(
         root, report, require_resolved
     )
+    validate_live_maps(root, report, require_resolved)
     validate_changes(
         root,
         requirement_ids,
@@ -1135,19 +1229,6 @@ def validate_repository(
                     )
         if report.domain_specs == 0:
             report.errors.append("specs/domains/: add at least one current domain spec before adoption")
-        for relative in (
-            Path("specs/product.md"),
-            Path("specs/architecture/system.md"),
-        ):
-            path = root / relative
-            if not path.is_file():
-                report.errors.append(f"{relative.as_posix()}: missing before adoption")
-            else:
-                raw_text = read_utf8(path, root, report)
-                if raw_text is not None and is_placeholder(without_fenced_blocks(raw_text)):
-                    report.errors.append(
-                        f"{relative.as_posix()}: unresolved live placeholder before adoption"
-                    )
     return report
 
 

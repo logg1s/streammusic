@@ -26,7 +26,9 @@ draft -> active -> verified -> integrate -> finalized
 5. If teammates still have working cards, optionally run
    `python scripts/verify.py --completion-gate --change CHG-...` as a readiness handoff.
 6. Integrate the intended work in the combined working copy.
-7. Run `python scripts/finalize_change.py --all`. It runs one global completion
+7. Run `python scripts/finalize_change.py --all`. When one request produced several
+   independent cards in one cohesive delivery, keep them verified and finalize that
+   batch together; do not batch unrelated requests. The finalizer runs one global completion
    before atomically changing each verified card Status to `finalized`. Repeat
    `--change CHG-...` in one command only for a deliberately selected batch.
 

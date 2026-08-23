@@ -17,6 +17,8 @@
 - Direction: a dark, editorial overview with a quiet collection rail, square album media, and a rounded artist rail above the persistent player.
 - Why this direction: it matches Vọng's charcoal/coral system and upgrades navigation from a flat track list into an image-led overview without inventing a new content type.
 - Alternatives not selected and material trade-off: a tab strip embedded only inside the tracks page would retain deep links but would not make Library a distinct destination; a new composite data endpoint would add API surface without changing the listener outcome.
+- Selected by: Long
+- Selected on: 2026-08-23
 
 ## Main journey
 
@@ -28,7 +30,7 @@
 
 | Surface | Purpose | Relevant states | Accepted artifact |
 | --- | --- | --- | --- |
-| Web `/library` | Collection overview, rich desktop entry point | populated / empty | ImageGen concept inspected in this Codex task (preview-only; not a repository asset) |
+| Web `/library` | Collection overview, rich desktop entry point | populated / empty | Direction only; no durable visual artifact was accepted |
 | Android Library tab | Touch entry point using the same collection sequence | loading / populated / empty / API error | Same selected direction, adapted to native list and horizontal rails |
 
 ## Experience constraints

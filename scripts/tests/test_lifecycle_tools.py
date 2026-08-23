@@ -84,7 +84,8 @@ class StatusTests(unittest.TestCase):
             self.assertTrue(payload["ok"], payload["errors"])
             self.assertEqual(len(payload["changes"]["working"]), 2)
             self.assertEqual(len(payload["changes"]["verified"]), 1)
-            self.assertEqual(len(payload["changes"]["finalized"]), 1)
+            self.assertEqual(payload["changes"]["finalized"], [])
+            self.assertEqual(payload["changes"]["finalized_count"], 1)
             self.assertEqual(payload["open_lane"], "critical")
             self.assertEqual(payload["verification"]["fast_commands"], 0)
             self.assertFalse(payload["global_completion_ready"])
@@ -121,11 +122,77 @@ class StatusTests(unittest.TestCase):
             with patch(
                 "sdd_status.git_handoff_state",
                 return_value={"available": True, "ready": False, "dirty_entries": 3},
+            ), patch(
+                "sdd_status.git_delivery_state",
+                return_value={
+                    "available": True,
+                    "finalized_total": 1,
+                    "uncheckpointed_finalized": 1,
+                },
             ):
                 payload = build_status(root)
 
             self.assertFalse(payload["handoff"]["ready"])
             self.assertTrue(any("handoff:" in warning for warning in payload["warnings"]))
+            self.assertTrue(any("delivery:" in warning for warning in payload["warnings"]))
+
+    def test_delivery_warning_is_not_hidden_by_an_open_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            adopt(root)
+            write(
+                root / "specs/changes/CHG-001-history/change.md",
+                completed_change(status="finalized"),
+            )
+            write(
+                root / "specs/changes/CHG-002-next/change.md",
+                valid_change(change_id="CHG-002", status="draft"),
+            )
+
+            with patch(
+                "sdd_status.git_delivery_state",
+                return_value={
+                    "available": True,
+                    "finalized_total": 1,
+                    "uncheckpointed_finalized": 1,
+                },
+            ):
+                payload = build_status(root)
+
+            self.assertTrue(any("delivery:" in warning for warning in payload["warnings"]))
+
+    def test_status_omits_finalized_metadata_unless_explicitly_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            adopt(root)
+            write(
+                root / "specs/changes/CHG-001-history/change.md",
+                completed_change(status="finalized"),
+            )
+
+            compact = build_status(root)
+            audit = build_status(root, include_finalized=True)
+
+            self.assertEqual(compact["changes"]["finalized"], [])
+            self.assertEqual(compact["changes"]["finalized_count"], 1)
+            self.assertEqual(
+                [card["id"] for card in audit["changes"]["finalized"]],
+                ["CHG-001"],
+            )
+
+    def test_untouched_draft_gets_clarification_next_action(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            adopt(root)
+            draft = valid_change(change_id="CHG-001", status="draft").replace(
+                "Improve account protection.", "Describe <user outcome>."
+            )
+            write(root / "specs/changes/CHG-001-next/change.md", draft)
+
+            payload = build_status(root)
+
+            self.assertIn("Clarify intent", payload["next_action"])
+            self.assertIn("CHG-001", payload["next_action"])
 
     def test_status_json_is_deterministic_and_read_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -8,6 +8,9 @@ Do not archive every sketch here. Draft alternatives, temporary screenshots, and
 exploration notes are working material rather than current truth. For a bounded
 change, record the selected direction and rationale in its change card instead.
 
-Link to the accepted mockup or runnable prototype. Keep delivered behavior in domain
-specs, interface shape in executable contracts, and architectural rationale in ADRs.
-When an accepted design changes materially, update or retire it explicitly.
+Record who selected a material direction and when. Link to an accepted mockup or
+runnable prototype only when that artifact is durable and repository-relative or
+available at a stable shared URL. Otherwise label the entry as direction-only rather
+than referring to a preview that future agents cannot inspect. Keep delivered behavior
+in domain specs, interface shape in executable contracts, and architectural rationale
+in ADRs. When an accepted design changes materially, update or retire it explicitly.

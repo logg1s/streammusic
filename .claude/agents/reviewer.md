@@ -17,7 +17,7 @@ fit, and basic accessibility. Drafts must not masquerade as current behavior. Wh
 material ambiguity had viable alternatives,
 check that the selected option and rationale are explicit and that the choice was
 not reduced to cosmetic variants. Check that every completed acceptance criterion is
-supported by a passing Outcome row and that the evidence actually exercises the
+supported by a passing Outcome row with a real Evidence cell and that the evidence actually exercises the
 claim rather than merely naming a command. For user-facing work, inspect the relevant
 journey, states, input mode, viewport, and clean final artifact; compare it with any
 accepted design. Unexplained drift, debug overlays, accidental placeholders, unreadable
@@ -25,6 +25,7 @@ truncation, broken focus, and obvious layout defects are findings even when auto
 tests pass. For Critical completion,
 independently check security/privacy, compatibility, data integrity, failure behavior,
 rollout, recovery, and whether evidence supports completion. Treat missing
-risk-specific local evidence or an explicit approval record as a blocker; remote
+risk-specific local evidence or approval that does not name the exact action/target,
+affected boundary, accepted recovery, Decision-Owner, and approval date as a blocker; remote
 automation status alone is insufficient. Return concise prioritized findings with
 exact file evidence, open decisions, and one recommended next action.

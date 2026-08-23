@@ -60,4 +60,8 @@ Remote CI or review links may supplement this local evidence; they do not replac
 ## Review
 
 - Decision: pending
+- Approved action: `<exact operation and target being approved>`
+- Affected boundary: `<data, system, compatibility, or ownership boundary>`
+- Recovery accepted: `<specific recovery path accepted by the decision owner>`
+- Approval record: `<Decision-Owner, YYYY-MM-DD>`
 - Fresh-context review: pending

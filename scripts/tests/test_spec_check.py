@@ -79,8 +79,15 @@ def make_root(base: Path) -> Path:
     )
     write(root / "specs/domains/accounts/spec.md", VALID_DOMAIN)
     write(root / "specs/changes/README.md", "# Active changes\n")
-    write(root / "specs/product.md", "# Product\n\nOwner: team\n\nBuild safer accounts.\n")
-    write(root / "specs/architecture/system.md", "# System\n\nOwner: team\n\nOne account module.\n")
+    live_metadata = "Owner: team\nStatus: current\nLast-Reviewed: 2026-08-19\n"
+    write(
+        root / "specs/product.md",
+        f"# Product\n\n{live_metadata}\nBuild safer accounts.\n",
+    )
+    write(
+        root / "specs/architecture/system.md",
+        f"# System\n\n{live_metadata}\nOne account module.\n",
+    )
     return root
 
 
@@ -121,6 +128,10 @@ def valid_change(
 
 ## Review
 - Decision: pending
+- Approved action: Lock accounts at the configured threshold.
+- Affected boundary: Account authentication state.
+- Recovery accepted: Disable the policy and unlock affected accounts.
+- Approval record: product-owner, 2026-08-19
 - Fresh-context review: pending
 """ if lane == "critical" else ""
     return f"""# `{change_id}-account-lockout`
@@ -189,6 +200,73 @@ class SpecCheckTests(unittest.TestCase):
             config_path.write_text(json.dumps(config), encoding="utf-8")
             report = validate_repository(root)
             self.assertTrue(report.ok, report.errors)
+
+    def test_adopted_live_maps_require_current_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            config_path = root / "sdd.config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["adopted"] = True
+            config["verification"]["standard"] = [["python", "-V"]]
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            product = root / "specs/product.md"
+            product.write_text(
+                product.read_text(encoding="utf-8")
+                .replace("Status: current\n", "Status: draft\n")
+                .replace("Last-Reviewed: 2026-08-19\n", ""),
+                encoding="utf-8",
+            )
+
+            report = validate_repository(root)
+
+            self.assertFalse(report.ok)
+            joined = "\n".join(report.errors)
+            self.assertIn("specs/product.md: Status must be current", joined)
+            self.assertIn("specs/product.md: missing or placeholder Last-Reviewed", joined)
+
+    def test_verified_outcome_and_experience_require_evidence_cells(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            content = valid_change(status="verified").replace("- [ ]", "- [x]")
+            content = content.replace(
+                "| Outcome: AC-CHG-001-01 | pass | local: acceptance behavior exercised |",
+                "| Outcome: AC-CHG-001-01 | pass |",
+            ).replace(
+                "| Experience: N/A - test fixture has no user-facing surface | pass | local: internal validation fixture changes no user-facing surface |",
+                "| Experience: N/A - test fixture has no user-facing surface | pass |",
+            ).replace(
+                "| spec check | pending | details |",
+                "| spec check | pass | local: structural check passed |",
+            )
+            write(root / "specs/changes/CHG-001-account-lockout/change.md", content)
+
+            report = validate_repository(root)
+
+            self.assertFalse(report.ok)
+            joined = "\n".join(report.errors)
+            self.assertIn("passing 'outcome: ac-chg-001-01' row requires", joined)
+            self.assertIn("passing 'experience: n/a", joined)
+
+    def test_open_critical_requires_exact_approval_details(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            content = valid_change(status="active", lane="critical").replace(
+                "- Decision: pending", "- Decision: approved"
+            ).replace(
+                "- Approved action: Lock accounts at the configured threshold.",
+                "- Approved action: pending",
+            ).replace(
+                "- Approval record: product-owner, 2026-08-19",
+                "- Approval record: someone",
+            )
+            write(root / "specs/changes/CHG-001-account-lockout/change.md", content)
+
+            report = validate_repository(root)
+
+            self.assertFalse(report.ok)
+            joined = "\n".join(report.errors)
+            self.assertIn("requires resolved 'Approved action'", joined)
+            self.assertIn("must name Decision-Owner 'product-owner'", joined)
 
     def test_adoption_rejects_starter_tooling_as_the_project_check(self) -> None:
         starter_commands = (

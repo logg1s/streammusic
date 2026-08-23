@@ -17,6 +17,8 @@
 - Direction:
 - Why this direction:
 - Alternatives not selected and material trade-off:
+- Selected by:
+- Selected on:
 
 ## Main journey
 

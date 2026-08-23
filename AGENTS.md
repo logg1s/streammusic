@@ -57,7 +57,7 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 | Test on emulator/device | `verify-android` |
 | Long-running local delivery | `vong-goal-workflow` |
 
-## Repository-native SDD v2.7 Scale-Safe
+## Repository-native SDD v2.7.1 Hardening
 
 - For any product behavior, adoption, ideation, design, or product review, read and
   follow `.agents/skills/repository-sdd/SKILL.md`. It is the canonical workflow; this
@@ -79,6 +79,8 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
   outside it unless a stated safety boundary requires it.
 - Keep one writer per working copy. Use subagents only for independent exploration,
   noisy analysis, or useful read-only review—not as mandatory ceremony.
+- Owner metadata names a stable responsible person, team, or workstream, not the
+  executing agent's temporary label.
 - Align current spec, code, tests, acceptance evidence, and experience evidence. For an
   integrated card finalized in the same turn, let
   `python scripts/finalize_change.py --all` own structural preflight, the configured
@@ -88,6 +90,8 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 - Finalization does not commit or push. Before changing writers or handing work to a
   teammate, create a normal VCS checkpoint. Reconcile product outcomes/boundaries once
   after a cohesive milestone when delivery changed them, not after every card.
+- When one request yields several independent cards in one cohesive delivery, keep
+  them verified and finalize the integrated batch once; do not batch unrelated work.
 
 ## Verification commands
 

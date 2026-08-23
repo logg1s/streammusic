@@ -63,6 +63,8 @@ Canonical ownership is per fact: domain specs own business rules; executable sch
   `<ID>` before marking the card `verified`.
 - Every completed change acceptance ID appears in passing `Outcome:` evidence; closely
   related criteria may share one row.
+- Every passing row on a verified card has a resolved Evidence cell; a command name
+  without result evidence is not completion proof.
   Every completed card also has one passing `Experience:` row: clean runtime evidence
   for a user-facing change, or a local reason that no user-facing surface changed.
 - A verified card remains open for lane selection and coordination until combined
