@@ -37,6 +37,10 @@ and reordering update the queue without corrupting track identity.
 - `AC-PLAYBACK-001-05`: Given a non-empty queue, when a listener opens it on web
   or Android phone, then upcoming tracks appear in an independent scrollable
   drawer or sheet without requiring the listener to scroll past Now Playing.
+- `AC-PLAYBACK-001-06`: Given upcoming tracks are visible in the Android queue,
+  including a radio queue, when the listener drags a track by its handle and
+  releases it, then upcoming play order follows the dropped order while the
+  current track and its playback state stay unchanged.
 
 ### Evidence
 

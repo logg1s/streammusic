@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  FlatList,
   Modal,
   Pressable,
   StyleSheet,
@@ -8,6 +7,10 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DraggableFlatList, {
+  ScaleDecorator,
+  type RenderItemParams,
+} from "react-native-draggable-flatlist";
 import { Artwork } from "@/components/artwork";
 import { usePlayer } from "@/store/player";
 import { colors, font, radius, spacing } from "@/theme";
@@ -111,15 +114,24 @@ export function QueueSheet({
           ) : null}
 
           <Text style={styles.sectionLabel}>Tiếp theo</Text>
-          <FlatList
+          <DraggableFlatList
             data={upcoming}
             keyExtractor={(item) => `${item.orderPosition}:${item.track.id}`}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
+            activationDistance={8}
+            autoscrollThreshold={56}
+            onDragEnd={({ from, to }) => {
+              if (from !== to) {
+                usePlayer
+                  .getState()
+                  .moveUpcoming(position + 1 + from, position + 1 + to);
+              }
+            }}
             ListEmptyComponent={
               <Text style={styles.empty}>Chưa có bài nào ở phía sau.</Text>
             }
-            renderItem={({ item }) => <QueueRow item={item} />}
+            renderItem={(params) => <UpcomingQueueRow {...params} />}
           />
         </View>
       </View>
@@ -127,21 +139,44 @@ export function QueueSheet({
   );
 }
 
+function UpcomingQueueRow(
+  props: RenderItemParams<{
+    orderPosition: number;
+    track: ReturnType<typeof usePlayer.getState>["queue"][number];
+  }>,
+) {
+  return (
+    <ScaleDecorator activeScale={1.015}>
+      <QueueRow {...props} />
+    </ScaleDecorator>
+  );
+}
+
 function QueueRow({
   item,
   current = false,
+  drag,
+  isActive = false,
 }: {
   item: { orderPosition: number; track: ReturnType<typeof usePlayer.getState>["queue"][number] };
   current?: boolean;
+  drag?: () => void;
+  isActive?: boolean;
 }) {
   return (
     <View style={[styles.queueRow, current && styles.queueRowCurrent]}>
       {!current ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Phát tiếp: ${item.track.title}`}
-          onPress={() => usePlayer.getState().moveToNext(item.orderPosition)}
-          style={({ pressed }) => [styles.dragButton, pressed && styles.pressed]}
+          accessibilityLabel={`Kéo ${item.track.title} để đổi thứ tự hàng đợi`}
+          accessibilityHint="Chạm tay nắm, kéo lên hoặc xuống rồi thả"
+          disabled={isActive}
+          onPressIn={drag}
+          style={({ pressed }) => [
+            styles.dragButton,
+            isActive && styles.dragButtonActive,
+            pressed && styles.pressed,
+          ]}
         >
           <Ionicons name="reorder-three" size={24} color={colors.subtle} />
         </Pressable>
@@ -276,6 +311,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  dragButtonActive: { opacity: 0.62 },
   playingMark: { width: 36, alignItems: "center" },
   trackButton: {
     minWidth: 0,

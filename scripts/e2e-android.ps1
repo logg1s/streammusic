@@ -121,6 +121,31 @@ function Tap-Node {
   Adb shell input tap $x $y
 }
 
+function Get-NodeTop {
+  param([Parameter(Mandatory)] [string] $Pattern, [int] $TimeoutSec = 60)
+  $node = Wait-Node $Pattern $TimeoutSec
+  if ($node.bounds -notmatch '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') {
+    throw "Bounds không hợp lệ cho $Pattern"
+  }
+  return [int]$matches[2]
+}
+
+function Drag-Node {
+  param(
+    [Parameter(Mandatory)] [string] $Pattern,
+    [Parameter(Mandatory)] [int] $VerticalDistance,
+    [int] $TimeoutSec = 60
+  )
+  $node = Wait-Node $Pattern $TimeoutSec
+  if ($node.bounds -notmatch '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') {
+    throw "Bounds không hợp lệ cho $Pattern"
+  }
+  $x = [int](([int]$matches[1] + [int]$matches[3]) / 2)
+  $y = [int](([int]$matches[2] + [int]$matches[4]) / 2)
+  # Kéo qua tối thiểu một hàng 68px từ tay nắm riêng của dòng playlist.
+  Adb shell input swipe $x $y $x ($y + $VerticalDistance) 800
+}
+
 function Save-Diagnostics {
   $shot = Join-Path $Artifacts "android-failure.png"
   $start = [System.Diagnostics.ProcessStartInfo]::new()
@@ -254,6 +279,26 @@ try {
   Adb shell input keyevent KEYCODE_BACK
   Tap-Node "Thư viện"
   Tap-Node "Playlist"
+  Wait-Node "Playlist E2E Ổn Định" 60 | Out-Null
+  Tap-Node "Playlist E2E Ổn Định"
+  Wait-Node "Kéo Sóng Thử Nghiệm Một để đổi vị trí" 60 | Out-Null
+  $firstTop = Get-NodeTop "^Sóng Thử Nghiệm Một$"
+  $secondTop = Get-NodeTop "^Sóng Thử Nghiệm Hai$"
+  if ($firstTop -ge $secondTop) { throw "Playlist fixture không bắt đầu theo thứ tự mong đợi" }
+  Drag-Node "Kéo Sóng Thử Nghiệm Một để đổi vị trí" 220
+  Wait-Until -Description "kéo-thả playlist cập nhật UI" -TimeoutSec 60 -Condition {
+    (Get-NodeTop "^Sóng Thử Nghiệm Một$") -gt (Get-NodeTop "^Sóng Thử Nghiệm Hai$")
+  }
+  if ((Get-MediaSession) -match 'state=(?:PLAYING\()?3\)?') {
+    throw "Kéo-thả playlist không được khởi phát playback"
+  }
+  Adb shell input keyevent KEYCODE_BACK
+  Wait-Node "Playlist E2E Ổn Định" 60 | Out-Null
+  Tap-Node "Playlist E2E Ổn Định"
+  Wait-Until -Description "thứ tự playlist được lưu sau khi mở lại" -TimeoutSec 60 -Condition {
+    (Get-NodeTop "^Sóng Thử Nghiệm Một$") -gt (Get-NodeTop "^Sóng Thử Nghiệm Hai$")
+  }
+  Adb shell input keyevent KEYCODE_BACK
   Wait-Node "Playlist E2E Ổn Định" 60 | Out-Null
   Tap-Node "Trang chủ"
   Tap-Node "Yêu thích"

@@ -50,6 +50,7 @@ temporary negative position phase before assigning final contiguous positions.
 - `AC-COLLECTIONS-002-01`: Given IDs already present in a playlist, when append is requested, then duplicates are ignored and only fresh valid IDs receive new positions.
 - `AC-COLLECTIONS-002-02`: Given the complete owned item ID set, when reorder is requested, then positions become contiguous in the requested order.
 - `AC-COLLECTIONS-002-03`: Given missing, duplicate, foreign, or incomplete item IDs, when reorder is requested, then the playlist is not partially reordered.
+- `AC-COLLECTIONS-002-04`: Given an owned playlist is open on Android, when the listener drags a track by its handle and releases it, then the visible and persisted playlist order match the dropped order without starting playback.
 
 ### Evidence
 

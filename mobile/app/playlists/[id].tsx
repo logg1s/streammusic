@@ -2,13 +2,16 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   Alert,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DraggableFlatList, {
+  ScaleDecorator,
+  type RenderItemParams,
+} from "react-native-draggable-flatlist";
 import { DetailHeader } from "@/components/detail-header";
 import {
   EmptyNote,
@@ -28,6 +31,7 @@ import {
   reorderPlaylist,
 } from "@/lib/playlist-actions";
 import { errorMessage, useApi } from "@/lib/use-api";
+import { movePlaylistItem } from "@/lib/playlist-order";
 import { colors, font, radius, spacing } from "@/theme";
 
 export default function PlaylistScreen() {
@@ -58,11 +62,14 @@ export default function PlaylistScreen() {
   const tracks = useMemo(() => items.map((item) => item.track), [items]);
 
   /** Chạy một lệnh ghi rồi tải lại; lỗi hiện ngay trên đầu danh sách chứ không im lặng. */
-  const run = async (work: () => Promise<void>) => {
-    if (busy) return;
+  const run = async (
+    work: () => Promise<void>,
+    optimistic?: PlaylistDetail,
+  ) => {
+    if (busy || shown === null) return;
     setBusy(true);
     setActionError(null);
-    setSnapshot(shown);
+    setSnapshot(optimistic ?? shown);
     try {
       await work();
       reload();
@@ -76,13 +83,19 @@ export default function PlaylistScreen() {
    * Đổi chỗ hai bài kề nhau rồi gửi CẢ thứ tự mới: server đòi tập itemId trùng khít tập
    * hiện có, nhờ vậy hai thiết bị mở song song không ghi đè nhau âm thầm.
    */
+  const persistOrder = (nextItems: PlaylistDetail["items"]) => {
+    if (shown === null) return;
+    const itemIds = nextItems.map((item) => item.itemId);
+    void run(
+      () => reorderPlaylist(id, itemIds),
+      { ...shown, items: nextItems },
+    );
+  };
+
   const move = (index: number, delta: number) => {
     const target = index + delta;
     if (target < 0 || target >= items.length) return;
-
-    const itemIds = items.map((item) => item.itemId);
-    [itemIds[index], itemIds[target]] = [itemIds[target], itemIds[index]];
-    void run(() => reorderPlaylist(id, itemIds));
+    persistOrder(movePlaylistItem(items, index, target));
   };
 
   const removePlaylist = async () => {
@@ -145,41 +158,24 @@ export default function PlaylistScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: shown.playlist.name }} />
-      <FlatList
+      <DraggableFlatList
         data={items}
         keyExtractor={(item) => item.itemId}
-        renderItem={({ item, index }) => (
-          <View style={styles.itemRow}>
-            <View style={styles.itemTrack}>
-              <TrackRow track={item.track} tracks={tracks} index={index} />
-            </View>
-            <IconAction
-              label={`Đưa ${item.track.title} lên trên`}
-              icon="chevron-up"
-              disabled={busy || index === 0}
-              onPress={() => move(index, -1)}
-            />
-            <IconAction
-              label={`Đưa ${item.track.title} xuống dưới`}
-              icon="chevron-down"
-              disabled={busy || index === items.length - 1}
-              onPress={() => move(index, 1)}
-            />
-            <IconAction
-              label={`Xoá ${item.track.title} khỏi playlist`}
-              icon="close"
-              disabled={busy}
-              color={colors.danger}
-              onPress={() => void run(() => removeFromPlaylist(id, item.itemId))}
-            />
-          </View>
+        renderItem={(params) => (
+          <PlaylistItemRow
+            {...params}
+            tracks={tracks}
+            busy={busy}
+            onMove={move}
+            onRemove={(item) => void run(() => removeFromPlaylist(id, item.itemId))}
+          />
         )}
+        onDragEnd={({ data: nextItems, from, to }) => {
+          if (from !== to) persistOrder(nextItems);
+        }}
+        activationDistance={8}
+        autoscrollThreshold={56}
         contentContainerStyle={content}
-        getItemLayout={(_, index) => ({
-          length: TRACK_ROW_HEIGHT,
-          offset: TRACK_ROW_HEIGHT * index,
-          index,
-        })}
         ListHeaderComponent={
           <View>
             <DetailHeader
@@ -265,6 +261,70 @@ function IconAction({
   );
 }
 
+/** Tay nắm riêng giúp kéo đổi thứ tự mà không tranh cử chỉ với phát hoặc nhấn giữ bài. */
+function PlaylistItemRow({
+  item,
+  getIndex,
+  drag,
+  isActive,
+  tracks,
+  busy,
+  onMove,
+  onRemove,
+}: RenderItemParams<PlaylistDetail["items"][number]> & {
+  tracks: PlaylistDetail["items"][number]["track"][];
+  busy: boolean;
+  onMove: (index: number, delta: number) => void;
+  onRemove: (item: PlaylistDetail["items"][number]) => void;
+}) {
+  const index = getIndex();
+  if (index === undefined) return null;
+
+  return (
+    <ScaleDecorator activeScale={1.015}>
+      <View style={[styles.itemRow, isActive && styles.itemRowDragging]}>
+        <View style={styles.itemTrack}>
+          <TrackRow track={item.track} tracks={tracks} index={index} />
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Kéo ${item.track.title} để đổi vị trí`}
+          accessibilityHint="Chạm tay nắm, kéo lên hoặc xuống rồi thả để lưu thứ tự mới"
+          disabled={busy || isActive}
+          hitSlop={6}
+          onPressIn={drag}
+          style={({ pressed }) => [
+            styles.iconButton,
+            (busy || isActive) && styles.disabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons name="reorder-three" size={21} color={colors.muted} />
+        </Pressable>
+        <IconAction
+          label={`Đưa ${item.track.title} lên trên`}
+          icon="chevron-up"
+          disabled={busy || index === 0}
+          onPress={() => onMove(index, -1)}
+        />
+        <IconAction
+          label={`Đưa ${item.track.title} xuống dưới`}
+          icon="chevron-down"
+          disabled={busy || index === tracks.length - 1}
+          onPress={() => onMove(index, 1)}
+        />
+        <IconAction
+          label={`Xoá ${item.track.title} khỏi playlist`}
+          icon="close"
+          disabled={busy}
+          color={colors.danger}
+          onPress={() => onRemove(item)}
+        />
+      </View>
+    </ScaleDecorator>
+  );
+}
+
 /** Nút icon kèm chữ trong dải hành động dưới đầu trang. */
 function TextAction({
   label,
@@ -303,6 +363,10 @@ const styles = StyleSheet.create({
   },
   itemTrack: {
     flex: 1,
+  },
+  itemRowDragging: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.md,
   },
   iconButton: {
     width: 30,

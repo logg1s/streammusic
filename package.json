@@ -1,6 +1,6 @@
 {
   "name": "streammusic",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -49,6 +49,7 @@
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "semver": "^7.8.5",
     "tailwind-merge": "^3.6.0",
     "youtubei.js": "^18.0.0",
     "zustand": "^5.0.15"

@@ -112,6 +112,8 @@ export interface PlayerState {
   insertNext: (track: PlayableTrack) => void;
   removeAt: (orderPos: number) => void;
   moveToNext: (orderPos: number) => void;
+  /** Đổi vị trí một bài chưa phát, không thay bài hiện tại hay trạng thái engine. */
+  moveUpcoming: (fromOrderPos: number, toOrderPos: number) => void;
 
   /** Chỉ AudioEngine gọi — đồng bộ state theo sự kiện của thẻ <audio>. */
   syncTime: (currentTime: number, duration: number) => void;
@@ -555,6 +557,25 @@ export function createPlayerStore(
           const newOrder = [...order];
           const [moved] = newOrder.splice(orderPos, 1);
           newOrder.splice(position + 1, 0, moved);
+          set({ order: newOrder });
+        },
+
+        moveUpcoming(fromOrderPos, toOrderPos) {
+          const { order, position } = get();
+          if (
+            fromOrderPos <= position ||
+            toOrderPos <= position ||
+            fromOrderPos >= order.length ||
+            toOrderPos >= order.length ||
+            fromOrderPos === toOrderPos
+          ) {
+            return;
+          }
+          // Chỉ đổi `order`: queue gốc và bài đang phát giữ nguyên nên engine native
+          // không nhận lệnh tải/phát mới khi listener sắp xếp phần "Tiếp theo".
+          const newOrder = [...order];
+          const [moved] = newOrder.splice(fromOrderPos, 1);
+          newOrder.splice(toOrderPos, 0, moved);
           set({ order: newOrder });
         },
 

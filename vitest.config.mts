@@ -8,7 +8,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["packages/shared/src/**/*.test.ts", "src/**/*.test.ts"],
+    include: [
+      "packages/shared/src/**/*.test.ts",
+      "src/**/*.test.ts",
+      "mobile/src/**/*.test.ts",
+    ],
   },
   resolve: {
     alias: {

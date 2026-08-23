@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import * as Linking from "expo-linking";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   DarkTheme,
   Stack,
@@ -48,9 +49,10 @@ const navTheme = {
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider value={navTheme}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaProvider>
+        <ThemeProvider value={navTheme}>
+          <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
         {/*
           Máy phát nằm ngoài cổng đăng nhập và ngoài navigator: điều hướng không được
           làm nó remount, nếu không tiếng đứt giữa bài. Nó tự render null.
@@ -59,11 +61,12 @@ export default function RootLayout() {
         <AnalyticsProvider />
         <E2EHandoffListener />
         {Platform.isTV ? null : <UpdateBanner />}
-        <FavoritesProvider>
-          {Platform.isTV ? <TvRoot /> : <SessionGate />}
-        </FavoritesProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+          <FavoritesProvider>
+            {Platform.isTV ? <TvRoot /> : <SessionGate />}
+          </FavoritesProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -185,6 +188,9 @@ function SessionGate() {
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   root: {
     flex: 1,
     backgroundColor: colors.bg,
