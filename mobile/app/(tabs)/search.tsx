@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
   FlatList,
+  LayoutAnimation,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,6 +39,7 @@ const DEBOUNCE_MS = 350;
 const SUGGEST_DEBOUNCE_MS = 180;
 const SEARCH_HISTORY_KEY = "vong-search-history";
 const SEARCH_HISTORY_LIMIT = 3;
+const DISCOVERY_RAIL_LIMIT = 6;
 
 interface SuggestionList {
   suggestions: string[];
@@ -403,13 +405,26 @@ function SearchLanding({
 }
 
 function DiscoveryRail({ label, tracks }: { label: string; tracks: PlayableTrack[] }) {
+  const [expanded, setExpanded] = useState(false);
   if (tracks.length === 0) return null;
+  const canExpand = tracks.length > DISCOVERY_RAIL_LIMIT;
+  const visibleTracks = expanded ? tracks : tracks.slice(0, DISCOVERY_RAIL_LIMIT);
 
   return (
     <View style={styles.discoveryRail}>
-      <SectionHeader label={label} />
+      <SectionHeader
+        label={label}
+        actionLabel={canExpand ? (expanded ? "Thu gọn" : "Xem tất cả") : undefined}
+        actionExpanded={canExpand ? expanded : undefined}
+        onAction={canExpand
+          ? () => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setExpanded((value) => !value);
+            }
+          : undefined}
+      />
       <FlatList
-        data={tracks.slice(0, 12)}
+        data={visibleTracks}
         keyExtractor={(track) => track.id}
         horizontal
         showsHorizontalScrollIndicator={false}

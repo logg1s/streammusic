@@ -296,6 +296,76 @@ class SpecCheckTests(unittest.TestCase):
             self.assertFalse(report.ok)
             self.assertTrue(any("duplicate requirement ACCOUNTS-001" in item for item in report.errors))
 
+    def test_domain_parts_inherit_metadata_and_preserve_requirement_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            index = VALID_DOMAIN.split("## `ACCOUNTS-001`")[0]
+            requirement = "## `ACCOUNTS-001`" + VALID_DOMAIN.split("## `ACCOUNTS-001`")[1]
+            write(root / "specs/domains/accounts/spec.md", index)
+            write(
+                root / "specs/domains/accounts/parts/access.md",
+                "# Access requirements\n\n" + requirement,
+            )
+
+            report = validate_repository(root)
+
+            self.assertTrue(report.ok, report.errors)
+            self.assertEqual(report.domain_specs, 1)
+            self.assertEqual(report.requirements, 1)
+
+    def test_domain_part_rejects_repeated_domain_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            index = VALID_DOMAIN.split("## `ACCOUNTS-001`")[0]
+            requirement = "## `ACCOUNTS-001`" + VALID_DOMAIN.split("## `ACCOUNTS-001`")[1]
+            write(root / "specs/domains/accounts/spec.md", index)
+            write(
+                root / "specs/domains/accounts/parts/access.md",
+                "# Access requirements\n\nOwner: another-team\n\n" + requirement,
+            )
+
+            report = validate_repository(root)
+
+            self.assertFalse(report.ok)
+            self.assertTrue(any("inherits Owner from ../spec.md" in item for item in report.errors))
+
+    def test_large_unsharded_domain_reports_non_blocking_hotspot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            path = root / "specs/domains/accounts/spec.md"
+            write(path, VALID_DOMAIN + "\n" + ("context-bearing detail " * 2200))
+
+            report = validate_repository(root)
+
+            self.assertTrue(report.ok, report.errors)
+            self.assertTrue(any("map hotspot" in item for item in report.warnings))
+
+    def test_durable_design_rejects_machine_local_artifact_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            write(
+                root / "specs/design/home/design.md",
+                "# Accepted home\n\nArtifact: `C:/Users/example/.codex/generated/home.png`\n",
+            )
+
+            report = validate_repository(root)
+
+            self.assertFalse(report.ok)
+            self.assertTrue(any("machine-local path" in item for item in report.errors))
+
+    def test_durable_design_accepts_repository_relative_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            write(root / "specs/design/home/assets/home.txt", "artifact")
+            write(
+                root / "specs/design/home/design.md",
+                "# Accepted home\n\n[Artifact](assets/home.txt)\n",
+            )
+
+            report = validate_repository(root)
+
+            self.assertTrue(report.ok, report.errors)
+
     def test_requirement_must_match_domain_prefix(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = make_root(Path(directory))

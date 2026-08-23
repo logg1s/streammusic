@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowRight, Play } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { ArrowLeft, ArrowRight, Play } from "lucide-react";
 import { Cover } from "@/components/library/cover";
 import {
   findNewReleaseSection,
@@ -82,9 +90,9 @@ export function HomeDiscovery({ fallbackTracks }: HomeDiscoveryProps) {
         <DiscoveryLoading />
       ) : (
         <>
-          {release && <DiscoveryRail title="Mới phát hành" tracks={release.tracks} />}
+          {release && <InteractiveTrackRail title="Mới phát hành" tracks={release.tracks} />}
           {discoverySections.map((section) => (
-            <DiscoveryRail
+            <InteractiveTrackRail
               key={section.title}
               title={section.title}
               tracks={section.tracks}
@@ -92,7 +100,7 @@ export function HomeDiscovery({ fallbackTracks }: HomeDiscoveryProps) {
             />
           ))}
           {trending.length > 0 && (
-            <DiscoveryRail title="Đang thịnh hành" tracks={trending} />
+            <InteractiveTrackRail title="Đang thịnh hành" tracks={trending} />
           )}
           {release === undefined && discoverySections.length === 0 && (
             <p role="status" className="text-sm text-muted-foreground">
@@ -162,7 +170,7 @@ function HomeHero({
   );
 }
 
-function DiscoveryRail({
+export function InteractiveTrackRail({
   title,
   tracks,
   label,
@@ -171,26 +179,148 @@ function DiscoveryRail({
   tracks: PlayableTrack[];
   label?: string;
 }) {
+  const headingId = useId();
+  const railRef = useRef<HTMLDivElement>(null);
+  const dragStart = useRef<{ pointerX: number; scrollLeft: number } | null>(null);
+  const suppressClick = useRef(false);
+  const [expanded, setExpanded] = useState(false);
+  const [canScrollBack, setCanScrollBack] = useState(false);
+  const [canScrollForward, setCanScrollForward] = useState(false);
+  const canExpand = expanded || canScrollBack || canScrollForward;
+
+  const updateScrollControls = useCallback(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    setCanScrollBack(rail.scrollLeft > 2);
+    setCanScrollForward(rail.scrollLeft + rail.clientWidth < rail.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || expanded) return;
+    updateScrollControls();
+    const observer = new ResizeObserver(updateScrollControls);
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [expanded, tracks.length, updateScrollControls]);
+
   if (tracks.length === 0) return null;
 
+  const scrollRail = (direction: -1 | 1) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    rail.scrollBy({
+      left: direction * Math.max(240, rail.clientWidth * 0.78),
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    const rail = railRef.current;
+    if (!rail) return;
+    event.preventDefault();
+    dragStart.current = { pointerX: event.clientX, scrollLeft: rail.scrollLeft };
+    suppressClick.current = false;
+    rail.style.scrollSnapType = "none";
+    rail.style.scrollBehavior = "auto";
+    rail.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = dragStart.current;
+    const rail = railRef.current;
+    if (!start || !rail) return;
+    event.preventDefault();
+    const distance = event.clientX - start.pointerX;
+    if (Math.abs(distance) > 5) suppressClick.current = true;
+    rail.scrollLeft = start.scrollLeft - distance;
+  };
+
+  const finishPointerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rail = railRef.current;
+    dragStart.current = null;
+    if (rail?.hasPointerCapture(event.pointerId)) rail.releasePointerCapture(event.pointerId);
+    if (rail) {
+      rail.style.scrollSnapType = "";
+      rail.style.scrollBehavior = "";
+    }
+  };
+
+  const handleClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!suppressClick.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClick.current = false;
+  };
+
   return (
-    <section aria-labelledby={`rail-${title}`}>
-      <div className="mb-4 flex items-baseline justify-between gap-4">
+    <section aria-labelledby={headingId}>
+      <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <h2 id={`rail-${title}`} className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
+          <h2 id={headingId} className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
           {label && <p className="mt-1 text-xs text-subtle">{label}</p>}
         </div>
-        <span className="inline-flex items-center gap-1 text-sm font-medium text-accent-text">
-          Xem tất cả <ArrowRight className="size-4" />
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {!expanded && (
+            <div className="hidden items-center gap-1 sm:flex" aria-label={`Cuộn dải ${title}`}>
+              <button
+                type="button"
+                onClick={() => scrollRail(-1)}
+                disabled={!canScrollBack}
+                className="grid size-8 place-items-center rounded-full border border-border text-muted-foreground transition-[color,background-color,transform,opacity] hover:scale-105 hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                aria-label={`Cuộn ${title} sang trái`}
+              >
+                <ArrowLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRail(1)}
+                disabled={!canScrollForward}
+                className="grid size-8 place-items-center rounded-full border border-border text-muted-foreground transition-[color,background-color,transform,opacity] hover:scale-105 hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                aria-label={`Cuộn ${title} sang phải`}
+              >
+                <ArrowRight className="size-4" />
+              </button>
+            </div>
+          )}
+          {canExpand && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
+              className="inline-flex min-h-9 items-center gap-1 rounded-full px-2 text-sm font-medium text-accent-text transition-[color,background-color,transform] hover:scale-[1.03] hover:bg-surface focus-visible:bg-surface"
+            >
+              {expanded ? "Thu gọn" : "Xem tất cả"}
+              <ArrowRight className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`} />
+            </button>
+          )}
+        </div>
       </div>
-      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 md:-mx-2 md:px-2">
-        {tracks.slice(0, 12).map((track, index) => (
+      <div
+        ref={railRef}
+        data-testid="discovery-track-rail"
+        onScroll={updateScrollControls}
+        onPointerDown={expanded ? undefined : handlePointerDown}
+        onPointerMove={expanded ? undefined : handlePointerMove}
+        onPointerUp={expanded ? undefined : finishPointerDrag}
+        onPointerCancel={expanded ? undefined : finishPointerDrag}
+        onClickCapture={expanded ? undefined : handleClickCapture}
+        className={expanded
+          ? "content-reveal grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+          : "-mx-4 flex cursor-grab snap-x gap-3 overflow-x-auto px-4 pb-2 active:cursor-grabbing md:-mx-2 md:px-2"
+        }
+      >
+        {tracks.map((track, index) => (
           <button
             key={track.id}
             type="button"
             onClick={() => playTrack(track, tracks, index)}
-            className="group w-36 shrink-0 snap-start text-left sm:w-40 lg:w-44"
+            className={expanded
+              ? "group min-w-0 text-left"
+              : "group w-36 shrink-0 snap-start select-none text-left sm:w-40 lg:w-44"
+            }
             aria-label={`Phát ${track.title}`}
           >
             <span className="relative block aspect-square overflow-hidden rounded-xl bg-surface shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
@@ -200,6 +330,7 @@ function DiscoveryRail({
                 size={176}
                 fill
                 className="rounded-xl transition-transform duration-300 group-hover:scale-[1.04]"
+                draggable={false}
               />
               <span className="absolute bottom-2 right-2 grid size-10 translate-y-1 place-items-center rounded-full bg-accent text-accent-foreground opacity-0 shadow-lg transition-all group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
                 <Play className="size-4 translate-x-px fill-current" />

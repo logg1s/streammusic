@@ -74,6 +74,7 @@ mobile/credentials/
 *.apk
 *.apk.sha256
 *.exe
+*.exe.sha256
 *.msi
 *.dmg
 *.AppImage

@@ -57,7 +57,7 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 | Test on emulator/device | `verify-android` |
 | Long-running local delivery | `vong-goal-workflow` |
 
-## Repository-native SDD v2.6.1 Context-Lean
+## Repository-native SDD v2.7 Scale-Safe
 
 - For any product behavior, adoption, ideation, design, or product review, read and
   follow `.agents/skills/repository-sdd/SKILL.md`. It is the canonical workflow; this
@@ -65,9 +65,10 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 - Inspect `sdd.config.json` first. If `adopted` is false, bootstrap automatically and
   require truthful current specs plus the real Standard application gate. Do not force
   adoption for explanation, review-only, cosmetic, or behavior-preserving work.
-- Read product/system maps, only affected domain specs, nearby contracts/tests, and a
-  matching open card. Exclude `specs/changes/**` from broad inventories; finalized card
-  contents are audit-only, not ordinary context.
+- Read product/system maps, only the current `spec.md` or optional `parts/*.md` file
+  that owns each affected requirement, nearby contracts/tests, and a matching open
+  card. Exclude `specs/changes/**` from broad inventories; finalized card contents are
+  audit-only, not ordinary context.
 - Domain specs own current behavior; executable contracts own interface shape; Drizzle
   schema and migrations own physical storage; tests provide evidence. Reconcile drift.
 - Preserve the user's requested scope. Resolve repository facts first, ask only about a
@@ -84,6 +85,9 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
   full lane, and lifecycle transition; do not run the same full gate first.
 - Local verification is authoritative. Report outcome, evidence, skipped checks, and
   unresolved assumptions/risks; never claim an unrun check passed.
+- Finalization does not commit or push. Before changing writers or handing work to a
+  teammate, create a normal VCS checkpoint. Reconcile product outcomes/boundaries once
+  after a cohesive milestone when delivery changed them, not after every card.
 
 ## Verification commands
 

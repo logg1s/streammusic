@@ -115,13 +115,17 @@ The signed-in home screen presents an immediately playable featured discovery it
 an explicit **Mới phát hành** rail when a current YouTube Music shelf is available,
 and personal-library/recent listening rows. Discovery loading or failure must not
 hide the library or interrupt the persistent player. A YouTube item starts its radio
-queue; a library item starts a finite library queue.
+queue; a library item starts a finite library queue. Truncated Home sections expose a
+working **Xem tất cả** action on web and Android. Music rails accept native touch
+swipes, and web discovery rails additionally accept pointer dragging without starting
+playback accidentally.
 
 ### Acceptance criteria
 
 - `AC-DISCOVERY-005-01`: Given an authenticated listener and an available discovery shelf, when Home finishes loading, then the page exposes a named **Mới phát hành** rail with playable tracks.
 - `AC-DISCOVERY-005-02`: Given a listener selects a new-release or featured YouTube track, when playback starts, then it enters the existing radio flow rather than a separate audio path.
 - `AC-DISCOVERY-005-03`: Given Home discovery is loading or unavailable, when the listener has library content, then their personal library rows remain available and the page remains usable.
+- `AC-DISCOVERY-005-04`: Given a Home section contains more content than its compact presentation, when the listener activates **Xem tất cả** or drags/swipes its rail, then the hidden items become reachable on web and Android without remounting the persistent player or triggering an unintended track.
 
 ### Evidence
 
@@ -141,6 +145,8 @@ than an empty prompt. It can surface the available **Mới phát hành** shelf, 
 home shelves, and trending metadata from the existing YouTube discovery endpoints.
 Selecting a YouTube item enters the existing radio flow. A loading or failed discovery
 request leaves the search input and local search/history path usable on web and Android.
+Its music rails use the same functional expand/collapse and swipe or pointer-drag
+behavior as Home, so Search never advertises an inert **Xem tất cả** control.
 
 ### Acceptance criteria
 
@@ -151,6 +157,7 @@ request leaves the search input and local search/history path usable on web and 
   landing, when playback starts, then the existing radio flow receives that item.
 - `AC-DISCOVERY-006-03`: Given search discovery is unavailable, when the listener
   opens Search, then they can still enter and run a library/YouTube query.
+- `AC-DISCOVERY-006-04`: Given a Search discovery rail is available, when the listener expands or drags/swipes it, then every item remains reachable and playback still enters the existing radio flow.
 
 ### Evidence
 

@@ -1,26 +1,42 @@
 "use client";
 
-import { Play } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Play } from "lucide-react";
 import { Cover } from "@/components/library/cover";
 import { startRadioFor } from "@/lib/radio-client";
 import { usePlayer } from "@/store/player";
 import type { PlayableTrack } from "@vong/shared";
 
 export function HomeQuickGrid({ tracks }: { tracks: PlayableTrack[] }) {
+  const [expanded, setExpanded] = useState(false);
   if (tracks.length === 0) return null;
-  const visible = tracks.slice(0, 6);
+  const visible = expanded ? tracks : tracks.slice(0, 6);
+  const canExpand = tracks.length > 6;
 
   const play = (track: PlayableTrack, index: number) => {
     if (track.source === "youtube") startRadioFor(track);
-    else usePlayer.getState().playQueue(visible, index);
+    else usePlayer.getState().playQueue(tracks, index);
   };
 
   return (
     <section aria-labelledby="quick-title">
-      <h2 id="quick-title" className="mb-4 text-xl font-bold tracking-tight">
-        Nghe tiếp
-      </h2>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h2 id="quick-title" className="text-xl font-bold tracking-tight">
+          Nghe tiếp
+        </h2>
+        {canExpand && (
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={expanded}
+            className="inline-flex min-h-9 items-center gap-1 rounded-full px-2 text-sm font-medium text-accent-text transition-[color,background-color,transform] hover:scale-[1.03] hover:bg-surface"
+          >
+            {expanded ? "Thu gọn" : "Xem tất cả"}
+            <ArrowRight className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`} />
+          </button>
+        )}
+      </div>
+      <div className={`grid gap-2 sm:grid-cols-2 xl:grid-cols-3 ${expanded ? "content-reveal" : ""}`}>
         {visible.map((track, index) => (
           <button
             key={track.id}

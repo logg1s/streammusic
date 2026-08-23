@@ -29,7 +29,7 @@
 
 | Surface | Purpose | Relevant states | Accepted artifact |
 | --- | --- | --- | --- |
-| Web home | Start or continue a listening session | loading / no library / no discovery / success | `C:/Users/Long/.codex/generated_images/01a02ca5-83f0-70f1-965b-cf167162dc63/exec-a56a0348-52f3-40db-8630-2506e5bb1a33.png` |
+| Web home | Start or continue a listening session | loading / no library / no discovery / success | [`assets/home-accepted.png`](assets/home-accepted.png) |
 
 ## Experience constraints
 

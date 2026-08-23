@@ -1,6 +1,6 @@
 ---
 name: repository-sdd
-description: Use when starting or adopting a project, or when building, fixing, changing, or reviewing product behavior. Bootstrap an unadopted repository and keep its product map, code, and checks aligned. Skip explanation-only, cosmetic, and behavior-preserving internal work.
+description: Use when starting or adopting a project, or when ideating, designing, building, fixing, changing, or reviewing product behavior. Bootstrap an unadopted repository and keep product intent, current truth, code, and checks aligned. Skip explanation-only, cosmetic, and behavior-preserving internal work.
 ---
 
 Read and follow @../../../.agents/skills/repository-sdd/SKILL.md.

@@ -188,11 +188,17 @@ test("Home có release shelf phát được và tìm kiếm", async ({ browser }
   const artifacts = process.env.VONG_E2E_ARTIFACTS;
   if (!artifacts) throw new Error("Thiếu VONG_E2E_ARTIFACTS");
   const release = youtubeTrack("Bản phát hành E2E", "release-e2e");
+  const releaseShelf = [
+    release,
+    ...Array.from({ length: 13 }, (_, index) =>
+      youtubeTrack(`Bản phát hành E2E ${index + 2}`, `release-e2e-${index + 2}`),
+    ),
+  ];
   const followUp = youtubeTrack("Bài tiếp theo E2E", "release-next-e2e");
 
   await page.route("**/api/youtube/home", (route) =>
     route.fulfill({
-      json: { sections: [{ title: "Mới phát hành", tracks: [release] }] },
+      json: { sections: [{ title: "Mới phát hành", tracks: releaseShelf }] },
     }),
   );
   await page.route("**/api/youtube/trending", (route) =>
@@ -217,6 +223,50 @@ test("Home có release shelf phát được và tìm kiếm", async ({ browser }
   await expect(
     page.getByRole("heading", { name: release.title, exact: true }),
   ).toBeVisible();
+  const releaseSection = page.getByRole("region", { name: "Mới phát hành" });
+  const releaseRail = releaseSection.getByTestId("discovery-track-rail");
+  await releaseRail.scrollIntoViewIfNeeded();
+  const railBox = await releaseRail.boundingBox();
+  if (!railBox) throw new Error("Không đọc được kích thước dải Mới phát hành");
+  const noRadioDuringDrag = page
+    .waitForRequest(
+      (request) => new URL(request.url()).pathname === "/api/radio",
+      { timeout: 500 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  await page.mouse.move(railBox.x + railBox.width * 0.8, railBox.y + railBox.height * 0.45);
+  await page.mouse.down();
+  await page.mouse.move(railBox.x + railBox.width * 0.2, railBox.y + railBox.height * 0.45, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(() => releaseRail.evaluate((node) => node.scrollLeft)).toBeGreaterThan(80);
+  await expect(noRadioDuringDrag).resolves.toBe(false);
+
+  await releaseSection.getByRole("button", { name: "Xem tất cả" }).click();
+  await expect(releaseSection.getByRole("button", { name: "Thu gọn" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(
+    releaseSection.getByRole("button", { name: "Phát Bản phát hành E2E 14" }),
+  ).toBeVisible();
+  await releaseSection.getByRole("button", { name: "Thu gọn" }).click();
+  await expect(releaseSection.getByRole("button", { name: "Xem tất cả" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await releaseSection.getByRole("button", { name: "Xem tất cả" }).click();
+  await expect(
+    releaseSection.getByRole("button", { name: "Phát Bản phát hành E2E 14" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    )
+    .toBe(true);
+  await page.screenshot({ path: `${artifacts}/web-home-mobile.png`, fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 720 });
   const radioRequest = page.waitForRequest(
     (request) => new URL(request.url()).pathname === "/api/radio",
   );
@@ -279,11 +329,20 @@ test("Home giữ nhạc thư viện khi discovery không tải được", async 
 test("Search là điểm khám phá trước khi nhập từ khoá", async ({ browser }) => {
   const page = await loggedInPage(browser);
   const release = youtubeTrack("Bản phát hành Search E2E", "search-release-e2e");
+  const releaseShelf = [
+    release,
+    ...Array.from({ length: 7 }, (_, index) =>
+      youtubeTrack(
+        `Bản phát hành Search E2E ${index + 2}`,
+        `search-release-e2e-${index + 2}`,
+      ),
+    ),
+  ];
   const trending = youtubeTrack("Xu hướng Search E2E", "search-trending-e2e");
 
   await page.route("**/api/youtube/home", (route) =>
     route.fulfill({
-      json: { sections: [{ title: "Mới phát hành", tracks: [release] }] },
+      json: { sections: [{ title: "Mới phát hành", tracks: releaseShelf }] },
     }),
   );
   await page.route("**/api/youtube/trending", (route) =>
@@ -298,10 +357,21 @@ test("Search là điểm khám phá trước khi nhập từ khoá", async ({ br
   await page.goto("/search");
   await expect(page.getByRole("heading", { name: "Có thể bạn sẽ thích" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mới phát hành" })).toBeVisible();
+  const releaseSection = page.getByRole("region", { name: "Mới phát hành" });
+  await releaseSection.getByRole("button", { name: "Xem tất cả" }).click();
+  await expect(
+    releaseSection.getByRole("button", { name: "Phát Bản phát hành Search E2E 8" }),
+  ).toBeVisible();
+  await expect(releaseSection.getByRole("button", { name: "Thu gọn" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
   const radioRequest = page.waitForRequest(
     (request) => new URL(request.url()).pathname === "/api/radio",
   );
-  await page.getByRole("button", { name: `Phát ${release.title}` }).click();
+  await page
+    .getByRole("button", { name: `Phát ${release.title}`, exact: true })
+    .click();
   await radioRequest;
   await expect(page.getByText(release.title, { exact: true }).last()).toBeVisible();
   await page.context().close();

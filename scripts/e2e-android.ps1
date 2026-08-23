@@ -27,11 +27,25 @@ function Wait-Until {
 }
 
 function Get-UiXml {
-  & $adb shell rm -f /sdcard/vong-window.xml *> $null
-  & $adb shell uiautomator dump /sdcard/vong-window.xml *> $null
-  if ($LASTEXITCODE -ne 0) { throw "uiautomator không tạo được UI dump mới" }
-  $raw = (& $adb exec-out cat /sdcard/vong-window.xml | Out-String)
-  return [xml]$raw
+  $localDump = Join-Path $env:TEMP "vong-window-$PID.xml"
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    $raw = $null
+    & $adb shell rm -f /sdcard/vong-window.xml *> $null
+    & $adb shell uiautomator dump /sdcard/vong-window.xml *> $null
+    if ($LASTEXITCODE -eq 0) {
+      & $adb pull /sdcard/vong-window.xml $localDump *> $null
+      if ($LASTEXITCODE -eq 0 -and (Test-Path $localDump)) {
+        $raw = Get-Content -Raw -Encoding utf8 $localDump
+        Remove-Item -LiteralPath $localDump -Force
+      }
+      if ($null -ne $raw -and $raw.TrimStart().StartsWith("<")) {
+        try { return [xml]$raw } catch { }
+      }
+    }
+    Start-Sleep -Milliseconds 500
+  }
+  Remove-Item -LiteralPath $localDump -Force -ErrorAction SilentlyContinue
+  throw "uiautomator không tạo được UI dump mới"
 }
 
 function Find-Node {
@@ -177,7 +191,9 @@ try {
   Adb shell monkey -p $package -c android.intent.category.LAUNCHER 1
   Start-Sleep -Seconds 2
   if ($null -ne (Find-Node "^Close app$")) { Tap-Node "^Close app$" }
-  Wait-Node "Đăng nhập bằng Google" 120 | Out-Null
+  # Giữ locator không phụ thuộc mã hóa Unicode của PowerShell host; đây là nhãn
+  # riêng của nút đăng nhập duy nhất trên màn hình khởi đầu.
+  Wait-Node "Google" 120 | Out-Null
 
   $handoffFile = Join-Path $Artifacts "android-handoff.json"
   & npx.cmd dotenv -e .env.local -- tsx scripts/e2e-fixture.ts handoff --output $handoffFile `

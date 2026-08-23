@@ -68,8 +68,10 @@ direction and rationale in the narrowest durable place:
   product, multiple features, or a broad experience over time;
 - use an ADR only for an architectural decision whose rationale must outlive the change.
 
-Link accepted mockups or prototypes instead of duplicating them. A broad UI card may
-add a `Design: <selected direction or artifact>` evidence row, but the existing
+Link accepted mockups or prototypes instead of duplicating them. A durable accepted
+artifact must use a repository-relative path or stable shared URL, never a machine-local
+or temporary harness path. A broad UI card may add a
+`Design: <selected direction or artifact>` evidence row, but the existing
 `Outcome:` and `Experience:` requirements remain authoritative.
 
 ## Implement and reconcile

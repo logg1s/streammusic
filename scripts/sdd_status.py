@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,6 +33,35 @@ def read_config(root: Path) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def git_handoff_state(root: Path) -> dict:
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=normal",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except OSError:
+        return {"available": False, "ready": None, "dirty_entries": None}
+    if result.returncode != 0:
+        return {"available": False, "ready": None, "dirty_entries": None}
+    dirty_entries = len([line for line in result.stdout.splitlines() if line.strip()])
+    return {
+        "available": True,
+        "ready": dirty_entries == 0,
+        "dirty_entries": dirty_entries,
+    }
+
+
 def build_status(root: Path) -> dict:
     root = root.resolve()
     report = validate_repository(root)
@@ -46,6 +76,7 @@ def build_status(root: Path) -> dict:
         groups[record.lifecycle].append(card_payload(record, root))
 
     open_records = [record for record in records if record.is_open]
+    handoff = git_handoff_state(root)
     open_lane = max(
         ("fast", *(record.lane for record in open_records)),
         key=LANES.index,
@@ -88,6 +119,17 @@ def build_status(root: Path) -> dict:
     else:
         next_action = "The map is ready for the next product request."
 
+    warnings = list(report.warnings)
+    if (
+        handoff["available"]
+        and handoff["dirty_entries"]
+        and not open_records
+    ):
+        warnings.append(
+            "handoff: local changes remain after completion; create a normal VCS "
+            "checkpoint before changing writers or handing the repository to a teammate"
+        )
+
     return {
         "version": 1,
         "ok": not errors,
@@ -105,8 +147,9 @@ def build_status(root: Path) -> dict:
             "standard_commands": standard_count,
             "critical_specific_commands": critical_count,
         },
+        "handoff": handoff,
         "blockers": blockers,
-        "warnings": report.warnings,
+        "warnings": warnings,
         "errors": errors,
         "next_action": next_action,
     }
@@ -138,6 +181,12 @@ def print_human(payload: dict) -> None:
         f"Standard={verification['standard_commands']}, "
         f"Critical-specific={verification['critical_specific_commands']}"
     )
+    handoff = payload["handoff"]
+    if handoff["available"]:
+        if handoff["ready"]:
+            print("Handoff: VCS working tree checkpointed")
+        else:
+            print(f"Handoff: local changes present ({handoff['dirty_entries']} entries)")
     for error in payload["errors"]:
         print(f"ERROR: {error}", file=sys.stderr)
     for warning in payload["warnings"]:

@@ -109,6 +109,24 @@ class StatusTests(unittest.TestCase):
                 any("Critical-specific" in warning for warning in payload["warnings"])
             )
 
+    def test_completed_dirty_repository_reports_handoff_checkpoint_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = make_root(Path(directory))
+            adopt(root)
+            write(
+                root / "specs/changes/CHG-001-history/change.md",
+                completed_change(status="finalized"),
+            )
+
+            with patch(
+                "sdd_status.git_handoff_state",
+                return_value={"available": True, "ready": False, "dirty_entries": 3},
+            ):
+                payload = build_status(root)
+
+            self.assertFalse(payload["handoff"]["ready"])
+            self.assertTrue(any("handoff:" in warning for warning in payload["warnings"]))
+
     def test_status_json_is_deterministic_and_read_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = make_root(Path(directory))

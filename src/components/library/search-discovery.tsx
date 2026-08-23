@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Play } from "lucide-react";
-import { Cover } from "@/components/library/cover";
-import { startRadioFor } from "@/lib/radio-client";
-import { usePlayer } from "@/store/player";
+import { InteractiveTrackRail } from "@/components/library/home-discovery";
 import {
   findNewReleaseSection,
   type DiscoveryHomeSection,
@@ -81,59 +78,11 @@ export function SearchDiscovery() {
           Có thể bạn sẽ thích
         </h2>
       </div>
-      {release && <DiscoveryRail title="Mới phát hành" tracks={release.tracks} />}
-      {trending.length > 0 && <DiscoveryRail title="Đang thịnh hành" tracks={trending} />}
+      {release && <InteractiveTrackRail title="Mới phát hành" tracks={release.tracks} />}
+      {trending.length > 0 && <InteractiveTrackRail title="Đang thịnh hành" tracks={trending} />}
       {remaining.slice(0, 2).map((section) => (
-        <DiscoveryRail key={section.title} title={section.title} tracks={section.tracks} />
+        <InteractiveTrackRail key={section.title} title={section.title} tracks={section.tracks} />
       ))}
-    </section>
-  );
-}
-
-function DiscoveryRail({ title, tracks }: { title: string; tracks: PlayableTrack[] }) {
-  if (tracks.length === 0) return null;
-
-  return (
-    <section aria-labelledby={`search-rail-${title}`}>
-      <div className="mb-4 flex items-baseline justify-between gap-4">
-        <h3 id={`search-rail-${title}`} className="text-xl font-bold tracking-tight">
-          {title}
-        </h3>
-        <span className="inline-flex items-center gap-1 text-sm font-medium text-accent-text">
-          Xem tất cả <ArrowRight className="size-4" />
-        </span>
-      </div>
-      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 md:-mx-2 md:px-2">
-        {tracks.slice(0, 12).map((track, index) => (
-          <button
-            key={track.id}
-            type="button"
-            onClick={() => {
-              if (track.source === "youtube") startRadioFor(track);
-              else usePlayer.getState().playQueue(tracks, index);
-            }}
-            className="group w-36 shrink-0 snap-start text-left sm:w-40 lg:w-44"
-            aria-label={`Phát ${track.title}`}
-          >
-            <span className="relative block aspect-square overflow-hidden rounded-xl bg-surface shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
-              <Cover
-                url={track.coverUrl}
-                title={track.albumName ?? track.title}
-                size={176}
-                fill
-                className="rounded-xl transition-transform duration-300 group-hover:scale-[1.04]"
-              />
-              <span className="absolute bottom-2 right-2 grid size-10 translate-y-1 place-items-center rounded-full bg-accent text-accent-foreground opacity-0 shadow-lg transition-all group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
-                <Play className="size-4 translate-x-px fill-current" />
-              </span>
-            </span>
-            <span className="mt-2.5 block truncate text-sm font-semibold">{track.title}</span>
-            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-              {track.artistName ?? "YouTube Music"}
-            </span>
-          </button>
-        ))}
-      </div>
     </section>
   );
 }

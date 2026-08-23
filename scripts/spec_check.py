@@ -42,8 +42,14 @@ CHANGE_AC_LINE = re.compile(
     rf"^- \[([ xX])\]\s+`?AC-({CHANGE_ID_PATTERN})-\d{{2}}`?:\s+\S",
     re.MULTILINE,
 )
+MACHINE_LOCAL_PATH = re.compile(
+    r'(?i)(?:[a-z]:[\\/](?:users|documents and settings)[\\/][^\s\x60"<>]+|'
+    r'/(?:users|home)/[^/\s\x60]+/[^\s\x60"<>]+)'
+)
 
 DOMAIN_METADATA = ("Spec-ID", "Owner", "Status", "Last-Reviewed")
+DOMAIN_REQUIREMENT_WARNING_LIMIT = 25
+DOMAIN_TEXT_WARNING_LIMIT = 40_000
 STANDARD_CHANGE_METADATA = (
     "Change-ID",
     "Status",
@@ -315,16 +321,16 @@ def validate_domain_specs(
 
     for path in paths:
         relative = path.relative_to(root)
-        raw_text = read_utf8(path, root, report)
-        if raw_text is None:
+        root_raw_text = read_utf8(path, root, report)
+        if root_raw_text is None:
             continue
         report.domain_specs += 1
-        text = without_fenced_blocks(raw_text)
-        if require_resolved and is_placeholder(text):
+        root_text = without_fenced_blocks(root_raw_text)
+        if require_resolved and is_placeholder(root_text):
             report.errors.append(f"{relative}: unresolved placeholder in current domain spec")
-        values = metadata(text, DOMAIN_METADATA)
+        values = metadata(root_text, DOMAIN_METADATA)
         for key in DOMAIN_METADATA:
-            count = metadata_count(text, key)
+            count = metadata_count(root_text, key)
             if count > 1:
                 report.errors.append(f"{relative}: duplicate header metadata {key}")
             elif key not in values or is_placeholder(values.get(key, "")):
@@ -339,43 +345,98 @@ def validate_domain_specs(
         if values.get("Status", "").lower() != "current":
             report.errors.append(f"{relative}: Status must be current")
 
-        requirements = DOMAIN_HEADING.findall(text)
-        if not requirements:
-            report.errors.append(f"{relative}: no requirement heading such as `DOMAIN-001`")
-        requirement_set = set(requirements)
-        acceptance_for: set[str] = set()
-        for match in DOMAIN_AC_LINE.finditer(text):
-            acceptance_id = match.group(1)
-            requirement_id = match.group(2)
-            if requirement_id not in requirement_set:
+        parts_root = path.parent / "parts"
+        part_paths: list[Path] = []
+        if parts_root.exists():
+            if not parts_root.is_dir() or is_link_like(parts_root):
                 report.errors.append(
-                    f"{relative}: acceptance ID {acceptance_id} has no matching requirement heading"
+                    f"{parts_root.relative_to(root)}: parts must be a regular directory"
                 )
+            else:
+                part_paths = sorted(parts_root.glob("*.md"))
+
+        requirement_files: list[tuple[Path, str]] = [(path, root_raw_text)]
+        for part_path in part_paths:
+            part_raw_text = read_utf8(part_path, root, report)
+            if part_raw_text is None:
                 continue
-            acceptance_for.add(requirement_id)
-            if acceptance_id in declared_acceptance:
-                first = declared_acceptance[acceptance_id].relative_to(root)
+            part_relative = part_path.relative_to(root)
+            part_text = without_fenced_blocks(part_raw_text)
+            for key in DOMAIN_METADATA:
+                if metadata_count(part_text, key):
+                    report.errors.append(
+                        f"{part_relative}: domain part inherits {key} from ../spec.md"
+                    )
+            if require_resolved and is_placeholder(part_text):
                 report.errors.append(
-                    f"{relative}: duplicate acceptance ID {acceptance_id}; first declared in {first}"
+                    f"{part_relative}: unresolved placeholder in current domain part"
                 )
-            else:
-                declared_acceptance[acceptance_id] = path
-        for requirement_id in requirements:
-            if requirement_id in declared:
-                first = declared[requirement_id].relative_to(root)
+            requirement_files.append((part_path, part_raw_text))
+
+        domain_requirement_count = 0
+        for requirement_path, raw_text in requirement_files:
+            requirement_relative = requirement_path.relative_to(root)
+            text = without_fenced_blocks(raw_text)
+            requirements = DOMAIN_HEADING.findall(text)
+            if requirement_path != path and not requirements:
                 report.errors.append(
-                    f"{relative}: duplicate requirement {requirement_id}; first declared in {first}"
+                    f"{requirement_relative}: no requirement heading such as `DOMAIN-001`"
                 )
-            else:
-                declared[requirement_id] = path
-            if spec_id and not requirement_id.startswith(spec_id + "-"):
-                report.errors.append(
-                    f"{relative}: requirement {requirement_id} must use Spec-ID prefix {spec_id}-"
+            domain_requirement_count += len(requirements)
+            if (
+                len(requirements) > DOMAIN_REQUIREMENT_WARNING_LIMIT
+                or len(raw_text) > DOMAIN_TEXT_WARNING_LIMIT
+            ):
+                report.warnings.append(
+                    f"map hotspot: {requirement_relative} has {len(requirements)} requirement(s) "
+                    f"and {len(raw_text)} characters; split it into optional parts so agents load "
+                    "only the affected capability"
                 )
-            if requirement_id not in acceptance_for:
-                report.errors.append(
-                    f"{relative}: {requirement_id} has no AC-{requirement_id}-NN marker"
-                )
+
+            requirement_set = set(requirements)
+            acceptance_for: set[str] = set()
+            for match in DOMAIN_AC_LINE.finditer(text):
+                acceptance_id = match.group(1)
+                requirement_id = match.group(2)
+                if requirement_id not in requirement_set:
+                    report.errors.append(
+                        f"{requirement_relative}: acceptance ID {acceptance_id} "
+                        "has no matching requirement heading in the same file"
+                    )
+                    continue
+                acceptance_for.add(requirement_id)
+                if acceptance_id in declared_acceptance:
+                    first = declared_acceptance[acceptance_id].relative_to(root)
+                    report.errors.append(
+                        f"{requirement_relative}: duplicate acceptance ID {acceptance_id}; "
+                        f"first declared in {first}"
+                    )
+                else:
+                    declared_acceptance[acceptance_id] = requirement_path
+            for requirement_id in requirements:
+                if requirement_id in declared:
+                    first = declared[requirement_id].relative_to(root)
+                    report.errors.append(
+                        f"{requirement_relative}: duplicate requirement {requirement_id}; "
+                        f"first declared in {first}"
+                    )
+                else:
+                    declared[requirement_id] = requirement_path
+                if spec_id and not requirement_id.startswith(spec_id + "-"):
+                    report.errors.append(
+                        f"{requirement_relative}: requirement {requirement_id} "
+                        f"must use Spec-ID prefix {spec_id}-"
+                    )
+                if requirement_id not in acceptance_for:
+                    report.errors.append(
+                        f"{requirement_relative}: {requirement_id} has no "
+                        f"AC-{requirement_id}-NN marker"
+                    )
+
+        if not domain_requirement_count:
+            report.errors.append(
+                f"{relative}: no requirement heading in spec.md or parts/*.md"
+            )
 
     report.requirements = len(declared)
     return set(declared), spec_ids, set(declared_acceptance)
@@ -776,6 +837,23 @@ def validate_markdown_links(root: Path, report: Report) -> None:
                 )
 
 
+def validate_design_portability(root: Path, report: Report) -> None:
+    design_root = root / "specs" / "design"
+    if not design_root.is_dir():
+        return
+    for path in contained_tree_files(design_root, root, report, suffix=".md"):
+        raw_text = read_utf8(path, root, report)
+        if raw_text is None:
+            continue
+        match = MACHINE_LOCAL_PATH.search(without_fenced_blocks(raw_text))
+        if match:
+            report.errors.append(
+                f"{path.relative_to(root)}: durable design references machine-local path "
+                f"'{match.group(0)}'; copy the accepted artifact into the repository or "
+                "use a stable shared URL"
+            )
+
+
 def contained_tree_files(
     tree: Path,
     root: Path,
@@ -1032,6 +1110,7 @@ def validate_repository(
             "after combined integration, run finalize_change.py --all"
         )
     validate_markdown_links(root, report)
+    validate_design_portability(root, report)
     validate_traceability(root, config, requirement_ids, acceptance_ids, report)
     if require_resolved:
         verification = config.get("verification", {}) if isinstance(config, dict) else {}

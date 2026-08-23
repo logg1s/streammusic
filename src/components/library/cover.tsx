@@ -10,6 +10,7 @@ interface CoverProps {
   fill?: boolean;
   className?: string;
   priority?: boolean;
+  draggable?: boolean;
 }
 
 /** Hai ký tự đầu của tên, dùng khi album không có ảnh bìa. */
@@ -27,6 +28,7 @@ export function Cover({
   fill,
   className,
   priority,
+  draggable,
 }: CoverProps) {
   const shared = cn(
     "overflow-hidden rounded-md bg-surface ring-1 ring-border",
@@ -62,6 +64,7 @@ export function Cover({
         fill
         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
         priority={priority}
+        draggable={draggable}
         className={cn(shared, "object-cover")}
       />
     );
@@ -74,6 +77,7 @@ export function Cover({
       width={size}
       height={size}
       priority={priority}
+      draggable={draggable}
       className={cn(shared, "object-cover")}
       style={fixedSize}
     />

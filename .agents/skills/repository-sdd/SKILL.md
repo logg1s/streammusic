@@ -14,8 +14,10 @@ decisions, never lanes, IDs, templates, or routine commands.
    implementation.
 2. Inspect `sdd.config.json`. If `adopted` is false, read
    [bootstrap.md](references/bootstrap.md) and establish current truth before a delta.
-3. Read `specs/product.md`, `specs/architecture/system.md`, only affected domain specs,
-   nearby contracts/tests, and a matching open card. Exclude `specs/changes/**` from
+3. Read `specs/product.md`, `specs/architecture/system.md`, only the current file that
+   owns each affected requirement, nearby contracts/tests, and a matching open card.
+   A compact domain may own requirements in `spec.md`; a large domain may route them
+   to `parts/*.md`. Exclude `specs/changes/**` from
    broad inventories. Use `python scripts/sdd_status.py` only when inherited or
    parallel state is unclear; do not enumerate change directories or print every
    card's metadata. If an open path must be located, return only open matches with
@@ -62,11 +64,15 @@ only when independent exploration, noisy analysis, or read-only review would hel
   restate the prompt, code structure, test steps, or schema prose in several files.
 - Keep each requirement to an observable rule, essential edge cases, and evidence
   links. Put temporary tasks and alternatives in the open card or working plan.
+- If `spec_check.py` reports a map hotspot, read
+  [map-maintenance.md](references/map-maintenance.md) and split only that logical
+  domain without changing its requirement IDs.
 
 ## Finish once
 
-1. Align current specs, code, tests, checked acceptance criteria, one passing
-   `Outcome:` row per criterion, and one truthful `Experience:` row.
+1. Align current specs, code, tests, checked acceptance criteria, passing `Outcome:`
+   evidence that names every criterion, and one truthful `Experience:` row. Closely
+   related criteria may share an Outcome row.
 2. After the last behavior edit, run each genuinely narrower focused command once.
    Do not repeat an unchanged focused command merely to fill or restate evidence. If
    the configured full lane is already the smallest useful check, skip a separate run.
@@ -79,3 +85,6 @@ only when independent exploration, noisy analysis, or read-only review would hel
 Read [verification.md](references/verification.md) only for diagnosis, a card that
 must remain open, parallel handoff, readiness without lifecycle transition, or a failed
 finalizer. Report outcome, evidence, skipped checks, and remaining assumptions/risks.
+After a cohesive milestone, reconcile product outcomes and boundaries once if delivery
+changed them; do not touch review dates per card. Finalization does not commit or push.
+Before changing writers or handing work to a teammate, create a normal VCS checkpoint.

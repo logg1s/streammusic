@@ -1,5 +1,13 @@
 import { useRouter, type Href } from "expo-router";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import {
+  FlatList,
+  LayoutAnimation,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { findNewReleaseSection, type PlayableTrack } from "@vong/shared";
 import { ALBUM_CARD_WIDTH, AlbumCard, ArtistRow } from "@/components/album-card";
@@ -27,6 +35,12 @@ import { colors, font, radius, spacing } from "@/theme";
 const ROWS = 6;
 const YT_SECTIONS = 4;
 const YT_ROWS = 5;
+const RELEASE_ROWS = 6;
+
+function animateSectionChange(action: () => void) {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  action();
+}
 
 /**
  * Trang chủ: phần thư viện trước, gợi ý YouTube sau.
@@ -216,11 +230,22 @@ function EditorialHero({
 }
 
 function ReleaseRail({ tracks }: { tracks: PlayableTrack[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleTracks = expanded ? tracks : tracks.slice(0, RELEASE_ROWS);
+  const canExpand = tracks.length > RELEASE_ROWS;
+
   return (
     <View style={styles.section}>
-      <SectionHeader label="Mới phát hành" />
+      <SectionHeader
+        label="Mới phát hành"
+        actionLabel={canExpand ? (expanded ? "Thu gọn" : "Xem tất cả") : undefined}
+        actionExpanded={canExpand ? expanded : undefined}
+        onAction={canExpand
+          ? () => animateSectionChange(() => setExpanded((value) => !value))
+          : undefined}
+      />
       <FlatList
-        data={tracks.slice(0, 12)}
+        data={visibleTracks}
         keyExtractor={(track) => track.id}
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -248,12 +273,21 @@ function ReleaseRail({ tracks }: { tracks: PlayableTrack[] }) {
 }
 
 function QuickGrid({ tracks }: { tracks: PlayableTrack[] }) {
-  const shown = tracks.slice(0, 6);
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? tracks : tracks.slice(0, 6);
+  const canExpand = tracks.length > 6;
   if (shown.length === 0) return null;
 
   return (
     <View style={styles.section}>
-      <SectionHeader label="Nghe tiếp" />
+      <SectionHeader
+        label="Nghe tiếp"
+        actionLabel={canExpand ? (expanded ? "Thu gọn" : "Xem tất cả") : undefined}
+        actionExpanded={canExpand ? expanded : undefined}
+        onAction={canExpand
+          ? () => animateSectionChange(() => setExpanded((value) => !value))
+          : undefined}
+      />
       <View style={styles.quickGrid}>
         {shown.map((track, index) => (
           <Pressable
@@ -262,7 +296,7 @@ function QuickGrid({ tracks }: { tracks: PlayableTrack[] }) {
             accessibilityLabel={`Phát ${track.title}`}
             onPress={() => {
               if (track.source === "youtube") void startRadioFor(track);
-              else usePlayer.getState().playQueue(shown, index);
+              else usePlayer.getState().playQueue(tracks, index);
             }}
             style={({ pressed }) => [
               styles.quickItem,
@@ -297,12 +331,22 @@ function TrackSection({
   limit: number;
   radioOnTap?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   if (tracks.length === 0) return null;
+  const canExpand = tracks.length > limit;
+  const visibleTracks = expanded ? tracks : tracks.slice(0, limit);
 
   return (
     <View style={styles.section}>
-      <SectionHeader label={label} />
-      {tracks.slice(0, limit).map((track, index) => (
+      <SectionHeader
+        label={label}
+        actionLabel={canExpand ? (expanded ? "Thu gọn" : "Xem tất cả") : undefined}
+        actionExpanded={canExpand ? expanded : undefined}
+        onAction={canExpand
+          ? () => animateSectionChange(() => setExpanded((value) => !value))
+          : undefined}
+      />
+      {visibleTracks.map((track, index) => (
         <TrackRow
           key={track.id}
           track={track}
@@ -413,5 +457,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.65,
+    transform: [{ scale: 0.98 }],
   },
 });
