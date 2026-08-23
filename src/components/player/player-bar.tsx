@@ -13,6 +13,7 @@ import {
   VolumeControl,
 } from "@/components/player/controls";
 import { NowPlayingSheet } from "@/components/player/now-playing-sheet";
+import { DesktopNowPlaying } from "@/components/player/desktop-now-playing";
 import { QueuePanel } from "@/components/player/queue-panel";
 import { useRadioConfig } from "@/components/player/radio-context";
 import { PROVIDER_LABEL } from "@/lib/provider-labels";
@@ -28,6 +29,7 @@ export function PlayerBar() {
   const radioOn = usePlayer((s) => s.radio !== null);
   const radioEnabled = useRadioConfig().enabled;
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [desktopNowPlayingOpen, setDesktopNowPlayingOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
 
   return (
@@ -46,7 +48,10 @@ export function PlayerBar() {
         <MiniProgress />
 
         <div className="mx-auto flex h-16 max-w-[1680px] items-center gap-3 px-3 sm:h-[88px] sm:gap-7 sm:px-6">
-          <NowPlaying onOpenSheet={() => setSheetOpen(true)} />
+          <NowPlaying
+            onOpenSheet={() => setSheetOpen(true)}
+            onOpenDesktop={() => setDesktopNowPlayingOpen(true)}
+          />
 
           {/* Desktop */}
           <div className="hidden flex-1 flex-col items-center gap-1.5 sm:flex">
@@ -104,6 +109,15 @@ export function PlayerBar() {
           }}
         />
       )}
+      {desktopNowPlayingOpen && (
+        <DesktopNowPlaying
+          onClose={() => setDesktopNowPlayingOpen(false)}
+          onOpenQueue={() => {
+            setDesktopNowPlayingOpen(false);
+            setQueueOpen(true);
+          }}
+        />
+      )}
       {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
     </>
   );
@@ -126,7 +140,13 @@ function MiniProgress() {
   );
 }
 
-function NowPlaying({ onOpenSheet }: { onOpenSheet: () => void }) {
+function NowPlaying({
+  onOpenSheet,
+  onOpenDesktop,
+}: {
+  onOpenSheet: () => void;
+  onOpenDesktop: () => void;
+}) {
   const track = useCurrentTrack();
 
   if (!track) {
@@ -167,15 +187,25 @@ function NowPlaying({ onOpenSheet }: { onOpenSheet: () => void }) {
         {info}
       </button>
 
-      {/* Desktop: nghệ sĩ là liên kết, kèm dải thông số nguồn. */}
+      {/* Desktop: mở mặt nghe nhạc toàn khung; nghệ sĩ vẫn giữ liên kết riêng. */}
       <div className="hidden min-w-0 flex-1 items-center gap-3 sm:flex">
-        <Cover
-          url={track.coverUrl}
-          title={track.albumName ?? track.title}
-          size={48}
-        />
+        <button
+          type="button"
+          onClick={onOpenDesktop}
+          aria-label={`Mở Đang phát: ${track.title}`}
+          className="flex min-w-0 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          <Cover
+            url={track.coverUrl}
+            title={track.albumName ?? track.title}
+            size={48}
+          />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{track.title}</p>
+            <p className="truncate text-xs text-muted-foreground">Mở Đang phát</p>
+          </div>
+        </button>
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{track.title}</p>
           {track.artistId ? (
             <Link
               href={`/artists/${track.artistId}`}

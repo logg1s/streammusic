@@ -50,6 +50,15 @@ export {
 export type { LibraryStats } from "./format";
 
 export {
+  findNewReleaseSection,
+  isNewReleaseTitle,
+} from "./discovery-home";
+export type { DiscoveryHomeSection } from "./discovery-home";
+
+export { createAsyncGenerationGate } from "./async-generation-gate";
+export type { AsyncGenerationGate } from "./async-generation-gate";
+
+export {
   LoginRequiredError,
   VideoUnplayableError,
   audioRangeHeaders,

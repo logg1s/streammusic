@@ -17,9 +17,13 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
-const LINKS = [
+const DISCOVERY_LINKS = [
   { href: "/", label: "Trang chủ", icon: House },
   { href: "/search", label: "Tìm kiếm", icon: Search },
+] as const;
+
+const LIBRARY_LINKS = [
+  { href: "/library", label: "Thư viện", icon: ListMusic },
   { href: "/albums", label: "Album", icon: Disc3 },
   { href: "/artists", label: "Nghệ sĩ", icon: Users },
   { href: "/tracks", label: "Bài hát", icon: ListMusic },
@@ -56,9 +60,28 @@ export function AppSidebar({ userName }: { userName: string | null }) {
 
       <p className="eyebrow px-3 pb-2">Khám phá</p>
 
-      {LINKS.map(({ href, label, icon: Icon }) => {
+      {DISCOVERY_LINKS.map(({ href, label, icon: Icon }) => {
         const active =
           href === "/" ? pathname === "/" : pathname.startsWith(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={itemClass(active)}
+          >
+            <Icon
+              className={cn("size-4 shrink-0", active && "text-accent-text")}
+            />
+            {label}
+          </Link>
+        );
+      })}
+
+      <p className="eyebrow px-3 pb-2 pt-6">Thư viện</p>
+
+      {LIBRARY_LINKS.map(({ href, label, icon: Icon }) => {
+        const active = pathname.startsWith(href);
         return (
           <Link
             key={href}

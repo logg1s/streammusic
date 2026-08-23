@@ -22,7 +22,7 @@ Last-Reviewed: 2026-08-19
 | Part | Responsibility | Owner | Talks to |
 | --- | --- | --- | --- |
 | Next.js web application and API (`src/`) | Web UI, authentication, provider OAuth, library APIs, scanning, storage streaming, collections, YouTube metadata, telemetry ingestion | Vong maintainers | PostgreSQL, storage providers, YouTube, GitHub |
-| Shared package (`packages/shared/`) | Cross-shell player state, radio client/engine, YouTube device resolver, analytics and update contracts | Vong maintainers | Web, Windows, Android |
+| Shared package (`packages/shared/`) | Cross-shell player state, radio client/engine, YouTube device resolver, async playback-load generation gate, analytics/update contracts, and locale-tolerant discovery shelf classification | Vong maintainers | Web, Windows, Android |
 | Windows shell (`src-tauri/`) | Hosts the web UI, resolves/decodes audio natively, and integrates Windows media controls | Vong maintainers | Deployed web app, Vong API, googlevideo |
 | Android app (`mobile/`) | Expo Router phone UI, D-pad-first Android TV UI, authenticated Vong API client, and one shared native Media3 playback engine | Vong maintainers | Vong API, shared package, googlevideo |
 | Android native module (`mobile/modules/vong-audio/`) | Media3 queue, byte requests, MediaSession, notification controls, and JS bridge | Vong maintainers | Android app, Vong API, googlevideo |
@@ -58,8 +58,9 @@ Last-Reviewed: 2026-08-19
   audio URL resolution stays off server infrastructure. Native library requests keep
   the Vong bearer header; googlevideo requests must not receive that bearer header.
 - Data ownership: Drizzle schema and migrations own storage shape; domain specs own
-  current behavior; shared TypeScript/native bridge types own executable interface
-  shapes; provider implementations own external API adaptation.
+  current behavior; shared TypeScript/native bridge types and discovery shelf
+  classification own executable cross-shell interface shapes; provider implementations
+  own external API adaptation.
 - Reliability/recovery: scans persist jobs/items and process bounded batches;
   unchanged remote revisions are skipped. OAuth refresh failure marks a connection
   for reauthorization. Telemetry failure is deliberately non-blocking.

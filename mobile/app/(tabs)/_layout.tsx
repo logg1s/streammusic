@@ -88,7 +88,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="tracks"
+        name="library"
         options={{
           title: "Thư viện",
           tabBarIcon: ({ color, focused }) => (
@@ -100,6 +100,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="tracks" options={{ title: "Bài hát", href: null }} />
       <Tabs.Screen
         name="albums"
         options={{

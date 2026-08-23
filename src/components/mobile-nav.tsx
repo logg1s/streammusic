@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/", label: "Trang chủ", icon: House },
   { href: "/search", label: "Tìm kiếm", icon: Search },
-  { href: "/tracks", label: "Thư viện", icon: LibraryBig },
+  { href: "/library", label: "Thư viện", icon: LibraryBig },
 ] as const;
 
 function isActive(pathname: string, href: string) {

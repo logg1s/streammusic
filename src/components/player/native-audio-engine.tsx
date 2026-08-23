@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  createAsyncGenerationGate,
   createYoutubeResolver,
   type FetchLike,
   type PlayableTrack,
@@ -100,7 +101,7 @@ export function NativeAudioEngine() {
    * hai bài phát cùng lúc — bất biến 1, theo nghĩa đen nhất của nó. Kiểm tra sau MỌI
    * `await`: mỗi điểm chờ là một chỗ để bài hiện tại đổi.
    */
-  const loadSeqRef = useRef(0);
+  const loadGateRef = useRef(createAsyncGenerationGate());
   /**
    * Đếm số lần phải nạp lại CÙNG một bài (lặp một bài). Không có nó, effect đổi bài
    * không chạy lại vì `trackId` không đổi, mà `seek(0)` thì vô nghĩa — sink của Rust đã
@@ -189,6 +190,7 @@ export function NativeAudioEngine() {
   //    bìa: đổi metadata thì không kéo lại byte.
   useEffect(() => {
     if (!trackId) {
+      loadGateRef.current.invalidate();
       loadedRef.current = null;
       return;
     }
@@ -201,9 +203,9 @@ export function NativeAudioEngine() {
     // Khôi phục chỗ đang nghe sau khi mở lại app: chỉ dùng đúng một lần.
     const startSec = state.consumePendingSeek() ?? 0;
 
-    const seq = ++loadSeqRef.current;
+    const seq = loadGateRef.current.begin();
     /** Lượt nạp này đã bị một lượt mới hơn thay thế chưa. */
-    const stale = () => loadSeqRef.current !== seq;
+    const stale = () => !loadGateRef.current.isCurrent(seq);
 
     loadedRef.current = trackId;
     loadingRef.current = true;

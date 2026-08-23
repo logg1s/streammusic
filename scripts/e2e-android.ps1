@@ -134,6 +134,12 @@ try {
   Wait-Until -Description "Android boot" -TimeoutSec 180 -Condition {
     ((& $adb shell getprop sys.boot_completed | Out-String).Trim()) -eq "1"
   }
+  # `sys.boot_completed` can be set while PackageManager is still reconnecting
+  # after a cold Android 16 emulator boot. Installing before Binder publishes
+  # that service flakes with "Failure calling service package: Broken pipe".
+  Wait-Until -Description "Android Package Manager" -TimeoutSec 90 -Condition {
+    ((& $adb shell service check package | Out-String) -match 'Service package: found')
+  }
   & $adb shell svc bluetooth disable *> $null
   Adb reverse tcp:41731 tcp:41731
 
@@ -184,6 +190,7 @@ try {
   Tap-Node "Để sau"
 
   Tap-Node "Thư viện"
+  Tap-Node "Bài hát"
   Wait-Node "Sóng Thử Nghiệm Ba" 60 | Out-Null
   Tap-Node "Thêm vào Yêu thích"
   Wait-Node "Bỏ khỏi Yêu thích" 60 | Out-Null

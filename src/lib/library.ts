@@ -258,6 +258,30 @@ export async function getAlbums(userId: string): Promise<AlbumSummary[]> {
     .orderBy(asc(albums.title));
 }
 
+/** Album vừa được đưa vào thư viện trước — dùng cho dải tổng quan, không thay thứ tự A–Z của trang Album. */
+export async function getRecentAlbums(
+  userId: string,
+  limit = 12,
+): Promise<AlbumSummary[]> {
+  return getDb()
+    .select({
+      id: albums.id,
+      title: albums.title,
+      year: albums.year,
+      coverUrl: albums.coverUrl,
+      artistId: albums.artistId,
+      artistName: artists.name,
+      trackCount: count(tracks.id),
+    })
+    .from(albums)
+    .leftJoin(artists, eq(albums.artistId, artists.id))
+    .leftJoin(tracks, eq(tracks.albumId, albums.id))
+    .where(eq(albums.userId, userId))
+    .groupBy(albums.id, artists.name)
+    .orderBy(desc(albums.createdAt), asc(albums.title))
+    .limit(limit);
+}
+
 export async function getAlbum(userId: string, albumId: string) {
   if (!isUuid(albumId)) return null;
   const [album] = await getDb()

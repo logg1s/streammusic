@@ -1,8 +1,8 @@
 import { requireUserId } from "@/lib/auth";
 import { toErrorResponse } from "@/lib/http";
 import {
-  getAlbums,
   getLibraryStats,
+  getRecentAlbums,
   getRecentlyPlayed,
   getRecentTracks,
 } from "@/lib/library";
@@ -23,7 +23,7 @@ export async function GET() {
     const [played, recent, albums, stats] = await Promise.all([
       getRecentlyPlayed(userId, 12),
       getRecentTracks(userId, 12),
-      getAlbums(userId),
+      getRecentAlbums(userId),
       getLibraryStats(userId),
     ]);
     return Response.json({ played, recent, albums, stats });

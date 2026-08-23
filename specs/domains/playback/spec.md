@@ -113,6 +113,35 @@ or the app is backgrounded. The TV shell mounts no second playback engine.
 - Test gap: background survival and OS controls still require a physical TV/device
   verification pass before a future Play Store submission.
 
+## `PLAYBACK-005` — Immersive desktop Now Playing
+
+### Rule
+
+Web and Windows listeners can open an immersive **Đang phát** surface from the
+persistent desktop player bar. It displays the current track, artwork, source readout,
+timeline, transport controls, and an explicit route to the existing queue. The surface
+is presentation and control only: it reads and writes the same shared player store and
+never mounts or controls a second playback engine.
+
+### Acceptance criteria
+
+- `AC-PLAYBACK-005-01`: Given a current track on web or Windows, when a listener
+  opens Now Playing from the desktop player bar, then track identity, artwork, timeline,
+  and transport controls are visible in an accessible dialog.
+- `AC-PLAYBACK-005-02`: Given the dialog is open, when the listener uses transport or
+  opens the queue, then the existing shared player state and queue panel handle the
+  action without changing engine selection.
+- `AC-PLAYBACK-005-03`: Given no current track, when the listener views the desktop
+  player bar, then no misleading Now Playing control is exposed.
+
+### Evidence
+
+- Runtime-confirmed: web E2E plays a library track, opens the desktop dialog from
+  the player bar, checks its track heading/timeline, opens the existing queue, and
+  captures a reviewed desktop screenshot. Windows/Tauri E2E runs after this flow.
+- Code-confirmed: the dialog consumes existing `usePlayer` controls only and does
+  not mount an audio engine.
+
 ## Connections
 
 - Consumes library streams from the [library domain](../library/spec.md).

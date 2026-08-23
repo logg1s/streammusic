@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  createAsyncGenerationGate,
   LoginRequiredError,
   VideoUnplayableError,
   type PlayableTrack,
@@ -106,7 +107,7 @@ export function PlaybackEngine() {
    * kết thúc bằng bài đã bị bỏ, trong khi store trỏ bài khác. Kiểm tra sau MỌI `await`,
    * không chỉ sau cái đầu tiên: mỗi điểm chờ là một chỗ để bài hiện tại đổi.
    */
-  const loadSeqRef = useRef(0);
+  const loadGateRef = useRef(createAsyncGenerationGate());
   /**
    * Bơm để chạy lại effect nạp bài khi `trackId` KHÔNG đổi: hết hàng đợi thì native đã
    * cạn item, phải nạp lại chính bài đó ở giây 0 để nút phát còn tác dụng.
@@ -130,6 +131,7 @@ export function PlaybackEngine() {
   //    effect 3 nối vào sau, khi bài này đã chạy.
   useEffect(() => {
     if (!trackId) {
+      loadGateRef.current.invalidate();
       loadedRef.current = null;
       currentItemRef.current = null;
       nextIdRef.current = null;
@@ -142,9 +144,9 @@ export function PlaybackEngine() {
     const current = peekCurrentTrack();
     if (!current || current.id !== trackId) return;
 
-    const seq = ++loadSeqRef.current;
+    const seq = loadGateRef.current.begin();
     /** Lượt nạp này đã bị một lượt mới hơn thay thế chưa. */
-    const stale = () => loadSeqRef.current !== seq;
+    const stale = () => !loadGateRef.current.isCurrent(seq);
 
     // Next liền mạch: bài mới CHÍNH LÀ đuôi đã resolve sẵn và đã nằm trong hàng đợi
     // native (effect 3 nối vào lúc bài trước đang chạy). Bấm Next trong app trước đây
@@ -253,12 +255,12 @@ export function PlaybackEngine() {
       if (wantedId === nextIdRef.current) return;
 
       toppingRef.current = true;
-      const seq = loadSeqRef.current;
+      const seq = loadGateRef.current.current();
       // Đuôi này thuộc về lượt nạp nào. Bài hiện tại đổi giữa chừng là cả cái đuôi vô
       // nghĩa: ghi nó vào `nextIdRef` là gắn đuôi của một vị trí đã bỏ làm "bài kế liền
       // mạch" của vị trí mới — đúng báo cáo "bấm Next ra nhầm bài".
       const stale = () =>
-        loadSeqRef.current !== seq ||
+        !loadGateRef.current.isCurrent(seq) ||
         loadingRef.current ||
         currentItemRef.current !== current;
 
@@ -391,8 +393,8 @@ export function PlaybackEngine() {
     const reloadCurrent = async (track: PlayableTrack, refreshAuth: boolean) => {
       // Nạp lại cũng là một lượt nạp: nó phải giành được quyền cầm lái, và phải chịu
       // bị một lượt mới hơn (người dùng bấm Next) hất ra như mọi lượt khác.
-      const seq = ++loadSeqRef.current;
-      const stale = () => loadSeqRef.current !== seq;
+      const seq = loadGateRef.current.begin();
+      const stale = () => !loadGateRef.current.isCurrent(seq);
 
       loadingRef.current = true;
       const store = usePlayer.getState();

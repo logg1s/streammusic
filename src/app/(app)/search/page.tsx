@@ -2,6 +2,7 @@ import { AlbumGrid } from "@/components/library/album-grid";
 import { TrackList } from "@/components/library/track-list";
 import { YoutubeSearch } from "@/components/library/youtube-search";
 import { SearchBox } from "@/components/library/search-box";
+import { SearchDiscovery } from "@/components/library/search-discovery";
 import { PageHeader } from "@/components/page-header";
 import { requireUserId } from "@/lib/auth";
 import { searchLibrary } from "@/lib/library";
@@ -59,7 +60,7 @@ export default async function SearchPage({
           </section>
         )}
 
-        <YoutubeSearch key={query} query={query} />
+        {query ? <YoutubeSearch key={query} query={query} /> : <SearchDiscovery />}
       </div>
     </>
   );

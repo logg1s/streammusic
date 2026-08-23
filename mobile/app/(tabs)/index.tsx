@@ -1,19 +1,17 @@
 import { useRouter, type Href } from "expo-router";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { PlayableTrack } from "@vong/shared";
+import { findNewReleaseSection, type PlayableTrack } from "@vong/shared";
 import { ALBUM_CARD_WIDTH, AlbumCard, ArtistRow } from "@/components/album-card";
 import { Artwork } from "@/components/artwork";
 import {
   EmptyNote,
   ErrorNote,
   Loading,
-  Readout,
   Screen,
 } from "@/components/screen";
 import { SectionHeader } from "@/components/section-header";
 import { TrackRow } from "@/components/track-row";
-import { formatLibraryStats } from "@/lib/format";
 import { startRadioFor } from "@/lib/radio-engine";
 import type {
   ArtistList,
@@ -69,6 +67,7 @@ export default function HomeScreen() {
 
   const data = home.data;
   if (data === null) return null;
+  const release = findNewReleaseSection(ytHome.data?.sections ?? []);
 
   const empty =
     data.stats.trackCount === 0 &&
@@ -77,14 +76,12 @@ export default function HomeScreen() {
 
   return (
     <Screen scroll refreshing={home.loading} onRefresh={reloadAll}>
-      <View style={styles.hero}>
-        <Text style={styles.heroEyebrow}>DÀNH CHO BẠN</Text>
-        <Text style={styles.heroTitle}>Chào bạn</Text>
-        <Text style={styles.heroText}>
-          Nhạc của bạn và danh sách kết hợp do YouTube đề xuất.
-        </Text>
-        <Readout text={formatLibraryStats(data.stats)} />
-      </View>
+      <EditorialHero
+        track={release?.tracks[0] ?? data.played[0] ?? data.recent[0]}
+        context={release?.tracks ?? data.played}
+      />
+
+      {release ? <ReleaseRail tracks={release.tracks} /> : null}
 
       <QuickGrid tracks={data.played} />
 
@@ -155,6 +152,7 @@ export default function HomeScreen() {
 
       {ytHome.data
         ? ytHome.data.sections
+            .filter((section) => section !== release)
             .slice(0, YT_SECTIONS)
             .map((section) => (
               <TrackSection
@@ -173,6 +171,79 @@ export default function HomeScreen() {
         </Text>
       ) : null}
     </Screen>
+  );
+}
+
+function EditorialHero({
+  track,
+  context,
+}: {
+  track: PlayableTrack | undefined;
+  context: PlayableTrack[];
+}) {
+  return (
+    <View style={styles.hero}>
+      <Text style={styles.heroTitle}>Âm nhạc dành cho bạn</Text>
+      {track ? (
+        <View style={styles.heroContent}>
+          <Artwork url={track.coverUrl} name={track.title} size={104} rounded="lg" />
+          <View style={styles.heroDetails}>
+            <Text numberOfLines={2} style={styles.heroTrack}>{track.title}</Text>
+            <Text numberOfLines={1} style={styles.heroArtist}>
+              {track.artistName ?? "YouTube Music"}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Phát ${track.title}`}
+              onPress={() => {
+                const index = Math.max(0, context.findIndex((item) => item.id === track.id));
+                if (track.source === "youtube") void startRadioFor(track);
+                else usePlayer.getState().playQueue(context, index);
+              }}
+              style={({ pressed }) => [styles.heroPlay, pressed && styles.pressed]}
+            >
+              <Ionicons name="play" size={20} color="#ffffff" />
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.heroText}>
+          Nối kho nhạc hoặc tìm kiếm một bài hát để bắt đầu phiên nghe mới.
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function ReleaseRail({ tracks }: { tracks: PlayableTrack[] }) {
+  return (
+    <View style={styles.section}>
+      <SectionHeader label="Mới phát hành" />
+      <FlatList
+        data={tracks.slice(0, 12)}
+        keyExtractor={(track) => track.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        ItemSeparatorComponent={() => <View style={styles.gap} />}
+        renderItem={({ item, index }) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Phát ${item.title}`}
+            onPress={() => {
+              if (item.source === "youtube") void startRadioFor(item);
+              else usePlayer.getState().playQueue(tracks, index);
+            }}
+            style={({ pressed }) => [styles.releaseCard, pressed && styles.pressed]}
+          >
+            <Artwork url={item.coverUrl} name={item.title} size={142} rounded="md" />
+            <Text numberOfLines={1} style={styles.releaseTitle}>{item.title}</Text>
+            <Text numberOfLines={1} style={styles.releaseArtist}>
+              {item.artistName ?? "YouTube Music"}
+            </Text>
+          </Pressable>
+        )}
+      />
+    </View>
   );
 }
 
@@ -254,24 +325,35 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  heroEyebrow: {
-    color: colors.accentText,
-    fontSize: font.xs,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-  },
   heroTitle: {
-    marginTop: spacing.sm,
     color: colors.text,
     fontSize: font.xxl,
     fontWeight: "800",
+    letterSpacing: -0.8,
   },
+  heroContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  heroDetails: { flex: 1, minWidth: 0 },
+  heroTrack: { color: colors.text, fontSize: font.lg, fontWeight: "800" },
+  heroArtist: { color: colors.muted, fontSize: font.sm, marginTop: spacing.xs },
   heroText: {
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
     color: colors.muted,
     fontSize: font.sm,
     lineHeight: 20,
+  },
+  heroPlay: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 42,
+    height: 42,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+    marginTop: spacing.lg,
   },
   quickGrid: {
     flexDirection: "row",
@@ -300,6 +382,14 @@ const styles = StyleSheet.create({
   gap: {
     width: spacing.md,
   },
+  releaseCard: { width: 142 },
+  releaseTitle: {
+    color: colors.text,
+    fontSize: font.sm,
+    fontWeight: "700",
+    marginTop: spacing.sm,
+  },
+  releaseArtist: { color: colors.muted, fontSize: font.xs, marginTop: 2 },
   ytError: {
     color: colors.subtle,
     fontSize: font.xs,

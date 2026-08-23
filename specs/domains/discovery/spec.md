@@ -107,6 +107,55 @@ read it.
   while the unused ranked-radio service has been removed. Its `radio_seeds` table is
   retained until a separately approved data migration removes it.
 
+## `DISCOVERY-005` — Editorial home and new releases
+
+### Rule
+
+The signed-in home screen presents an immediately playable featured discovery item,
+an explicit **Mới phát hành** rail when a current YouTube Music shelf is available,
+and personal-library/recent listening rows. Discovery loading or failure must not
+hide the library or interrupt the persistent player. A YouTube item starts its radio
+queue; a library item starts a finite library queue.
+
+### Acceptance criteria
+
+- `AC-DISCOVERY-005-01`: Given an authenticated listener and an available discovery shelf, when Home finishes loading, then the page exposes a named **Mới phát hành** rail with playable tracks.
+- `AC-DISCOVERY-005-02`: Given a listener selects a new-release or featured YouTube track, when playback starts, then it enters the existing radio flow rather than a separate audio path.
+- `AC-DISCOVERY-005-03`: Given Home discovery is loading or unavailable, when the listener has library content, then their personal library rows remain available and the page remains usable.
+
+### Evidence
+
+- Design: [accepted home direction](../../design/home/design.md).
+- Unit-test-confirmed: locale-tolerant release-shelf recognition is covered in
+  `packages/shared/src/discovery-home.test.ts`.
+- Runtime-confirmed: web E2E supplies a named release shelf, starts the existing
+  radio flow from it, and confirms library continuity when both discovery endpoints
+  fail; Android release E2E exercises the retained native player flow.
+
+## `DISCOVERY-006` — Search discovery landing
+
+### Rule
+
+Before a listener enters a query, Search is an active discovery destination rather
+than an empty prompt. It can surface the available **Mới phát hành** shelf, selected
+home shelves, and trending metadata from the existing YouTube discovery endpoints.
+Selecting a YouTube item enters the existing radio flow. A loading or failed discovery
+request leaves the search input and local search/history path usable on web and Android.
+
+### Acceptance criteria
+
+- `AC-DISCOVERY-006-01`: Given an authenticated listener opens Search with no query,
+  when discovery metadata is available, then the landing exposes a named playable
+  release or discovery shelf without duplicating a playback engine.
+- `AC-DISCOVERY-006-02`: Given a listener selects a YouTube item from the search
+  landing, when playback starts, then the existing radio flow receives that item.
+- `AC-DISCOVERY-006-03`: Given search discovery is unavailable, when the listener
+  opens Search, then they can still enter and run a library/YouTube query.
+
+### Evidence
+
+- Implementation and runtime evidence: pending the associated active change.
+
 ## Connections
 
 - Produces YouTube `PlayableTrack` values for [playback](../playback/spec.md).

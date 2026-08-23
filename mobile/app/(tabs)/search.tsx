@@ -11,8 +11,13 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { PlayableTrack } from "@vong/shared";
+import {
+  findNewReleaseSection,
+  type DiscoveryHomeSection,
+  type PlayableTrack,
+} from "@vong/shared";
 import { ALBUM_CARD_WIDTH, AlbumCard } from "@/components/album-card";
+import { Artwork } from "@/components/artwork";
 import {
   EmptyNote,
   ErrorNote,
@@ -23,8 +28,9 @@ import { SectionHeader } from "@/components/section-header";
 import { TrackRow } from "@/components/track-row";
 import { getAnalytics } from "@/lib/analytics";
 import { apiJson } from "@/lib/api";
-import type { SearchResult, TrackList } from "@/lib/dto";
+import type { SearchResult, TrackList, YoutubeSections } from "@/lib/dto";
 import { errorMessage, useApi } from "@/lib/use-api";
+import { startRadioFor } from "@/lib/radio-engine";
 import { colors, font, radius, spacing } from "@/theme";
 
 /** Chờ người ta gõ xong mới gọi — mỗi ký tự một request thì YouTube chặn ngay. */
@@ -123,6 +129,14 @@ export default function SearchScreen() {
 
   const library = useApi<SearchResult>(
     query.length > 0 ? `/api/library/search?q=${encodeURIComponent(query)}` : null,
+  );
+  // Search không có từ khoá cũng phải là một bề mặt nghe nhạc. Hai endpoint này
+  // chỉ trả metadata; bấm bài vẫn đi qua radio engine hiện có ở dưới.
+  const discovery = useApi<YoutubeSections>(
+    query.length === 0 ? "/api/youtube/home" : null,
+  );
+  const trending = useApi<TrackList>(
+    query.length === 0 ? "/api/youtube/trending" : null,
   );
 
   /**
@@ -257,9 +271,11 @@ export default function SearchScreen() {
         keyboardDismissMode="on-drag"
       >
         {query.length === 0 ? (
-          <EmptyNote
-            title="Tìm nhạc"
-            hint="Gõ vào ô trên để tìm trong thư viện của bạn, và tìm luôn trên YouTube."
+          <SearchLanding
+            sections={discovery.data?.sections ?? []}
+            trending={trending.data?.tracks ?? []}
+            loading={discovery.loading || trending.loading}
+            failed={discovery.error !== null && trending.error !== null}
           />
         ) : null}
 
@@ -336,6 +352,89 @@ export default function SearchScreen() {
   );
 }
 
+function SearchLanding({
+  sections,
+  trending,
+  loading,
+  failed,
+}: {
+  sections: DiscoveryHomeSection[];
+  trending: PlayableTrack[];
+  loading: boolean;
+  failed: boolean;
+}) {
+  const release = findNewReleaseSection(sections);
+  const remaining = sections.filter((section) => section !== release).slice(0, 2);
+  const hasContent = Boolean(release) || remaining.length > 0 || trending.length > 0;
+
+  if (loading && !hasContent) {
+    return (
+      <View style={styles.discoveryLoading} accessibilityLabel="Đang tải nhạc khám phá">
+        <ActivityIndicator color={colors.accent} />
+        <Text style={styles.inlineText}>Đang lấy nhạc để khám phá…</Text>
+      </View>
+    );
+  }
+
+  if (!hasContent) {
+    return (
+      <EmptyNote
+        title={failed ? "Chưa tải được nhạc khám phá" : "Tìm nhạc"}
+        hint={
+          failed
+            ? "Bạn vẫn có thể tìm trong thư viện và trên YouTube bằng ô phía trên."
+            : "Gõ vào ô trên để tìm trong thư viện của bạn, và tìm luôn trên YouTube."
+        }
+      />
+    );
+  }
+
+  return (
+    <View style={styles.discovery}>
+      <Text style={styles.discoveryEyebrow}>KHÁM PHÁ</Text>
+      <Text style={styles.discoveryTitle}>Có thể bạn sẽ thích</Text>
+      {release ? <DiscoveryRail label="Mới phát hành" tracks={release.tracks} /> : null}
+      {trending.length > 0 ? <DiscoveryRail label="Đang thịnh hành" tracks={trending} /> : null}
+      {remaining.map((section) => (
+        <DiscoveryRail key={section.title} label={section.title} tracks={section.tracks} />
+      ))}
+    </View>
+  );
+}
+
+function DiscoveryRail({ label, tracks }: { label: string; tracks: PlayableTrack[] }) {
+  if (tracks.length === 0) return null;
+
+  return (
+    <View style={styles.discoveryRail}>
+      <SectionHeader label={label} />
+      <FlatList
+        data={tracks.slice(0, 12)}
+        keyExtractor={(track) => track.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        ItemSeparatorComponent={() => <View style={styles.gap} />}
+        renderItem={({ item }) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Phát ${item.title}`}
+            onPress={() => {
+              if (item.source === "youtube") void startRadioFor(item);
+            }}
+            style={({ pressed }) => [styles.discoveryCard, pressed && styles.suggestionPressed]}
+          >
+            <Artwork url={item.coverUrl} name={item.title} size={142} rounded="md" />
+            <Text numberOfLines={1} style={styles.discoveryCardTitle}>{item.title}</Text>
+            <Text numberOfLines={1} style={styles.discoveryCardArtist}>
+              {item.artistName ?? "YouTube Music"}
+            </Text>
+          </Pressable>
+        )}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   searchBar: {
     paddingHorizontal: spacing.lg,
@@ -393,5 +492,46 @@ const styles = StyleSheet.create({
   inlineText: {
     color: colors.subtle,
     fontSize: font.sm,
+  },
+  discovery: {
+    marginTop: spacing.xxl,
+  },
+  discoveryEyebrow: {
+    color: colors.subtle,
+    fontSize: font.xs,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+  },
+  discoveryTitle: {
+    color: colors.text,
+    fontSize: font.xxl,
+    fontWeight: "800",
+    letterSpacing: -0.6,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  discoveryRail: {
+    marginBottom: spacing.xxl,
+  },
+  discoveryCard: {
+    width: 142,
+  },
+  discoveryCardTitle: {
+    color: colors.text,
+    fontSize: font.sm,
+    fontWeight: "700",
+    marginTop: spacing.sm,
+  },
+  discoveryCardArtist: {
+    color: colors.subtle,
+    fontSize: font.xs,
+    marginTop: 2,
+  },
+  discoveryLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xxl,
   },
 });

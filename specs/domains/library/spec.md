@@ -98,6 +98,27 @@ and 2 MiB for later chunks when file size is known. HEAD uses stored metadata on
 - Code-confirmed: [stream source ownership](../../../src/lib/stream-source.ts), [stream route](../../../src/app/api/stream/[trackId]/route.ts), native mobile resolver, and Windows track requests.
 - Test-confirmed only at flow level: [web E2E](../../../e2e/web/vong.spec.ts) starts library playback; provider redirects/range sizes are not asserted.
 
+## `LIBRARY-005` — Collection-oriented library overview
+
+### Rule
+
+Authenticated listeners can open a Library overview that gives a concise, user-scoped
+entry point to albums, artists, tracks, favorites, and playlists, while retaining the
+specialized collection routes for each kind of content. The overview highlights recent
+library albums and artists from the same owned metadata; it does not introduce another
+media catalog or alter playback ownership.
+
+### Acceptance criteria
+
+- `AC-LIBRARY-005-01`: Given an authenticated listener, when they open Library, then they can reach Album, Nghệ sĩ, Bài hát, Yêu thích, and Playlist directly from one overview.
+- `AC-LIBRARY-005-02`: Given owned library metadata, when Library renders, then its album and artist highlights contain only that listener's records and lead to their existing detail/collection routes.
+- `AC-LIBRARY-005-03`: Given an empty library, when Library renders, then it gives a clear next step without replacing or hiding the listener's existing navigation.
+
+### Evidence
+
+- Code/test-confirmed: the web Library overview composes owned library summaries and links to existing scoped favorite and playlist routes; web E2E exercises navigation.
+- Cross-shell evidence: Android exposes the same overview and collection shortcuts through authenticated existing APIs; device execution is covered by the release E2E lane.
+
 ## Connections
 
 - Requires sessions and provider credentials from the [identity domain](../identity/spec.md).
