@@ -171,7 +171,10 @@ function QueueRow({
           accessibilityLabel={`Kéo ${item.track.title} để đổi thứ tự hàng đợi`}
           accessibilityHint="Chạm tay nắm, kéo lên hoặc xuống rồi thả"
           disabled={isActive}
-          onPressIn={drag}
+          // `drag` must begin after a deliberate hold. Starting it on press-in
+          // races Android's pan recognizer, so a hold-and-drag can look inert.
+          onLongPress={drag}
+          delayLongPress={150}
           style={({ pressed }) => [
             styles.dragButton,
             isActive && styles.dragButtonActive,
