@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from spec_check import metadata, without_fenced_blocks
+from change_lifecycle import CHANGE_ID, control_snapshot, discover_changes, read_change
 
 
 LANES = ("fast", "standard", "critical")
@@ -39,10 +39,11 @@ def git_snapshot(root: Path) -> str | None:
     state = run_git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"])
     diff = run_git(root, ["diff", "--binary", "HEAD"])
     untracked = run_git(root, ["ls-files", "--others", "--exclude-standard", "-z"])
-    if state is None or diff is None or untracked is None:
+    head = run_git(root, ["rev-parse", "HEAD"])
+    if state is None or diff is None or untracked is None or head is None:
         return None
 
-    digest = hashlib.sha256(state.stdout + b"\0" + diff.stdout)
+    digest = hashlib.sha256(head.stdout + b"\0" + state.stdout + b"\0" + diff.stdout)
     for encoded in sorted(item for item in untracked.stdout.split(b"\0") if item):
         digest.update(b"\0untracked\0" + encoded + b"\0")
         path = root / os.fsdecode(encoded)
@@ -59,35 +60,33 @@ def git_snapshot(root: Path) -> str | None:
 
 
 def change_path(root: Path, change_id: str) -> Path | None:
+    if not CHANGE_ID.fullmatch(change_id):
+        return None
+    records, _ = discover_changes(root)
     matches = [
-        path
-        for path in (root / "specs" / "changes").glob(f"{change_id}-*")
-        if path.is_dir() and (path / "change.md").is_file()
+        record.directory
+        for record in records
+        if record.identifier == change_id and record.is_open
     ]
     return matches[0] if len(matches) == 1 else None
 
 
 def declared_lane(path: Path) -> str | None:
-    text = without_fenced_blocks((path / "change.md").read_text(encoding="utf-8"))
-    value = metadata(text, ("Lane",)).get("Lane", "").lower()
-    return value if value in {"standard", "critical"} else None
+    try:
+        return read_change(path, path.parents[2]).lane
+    except (OSError, RuntimeError, UnicodeError, ValueError):
+        return None
 
 
 def active_changes(root: Path) -> list[tuple[str, str]]:
-    result: list[tuple[str, str]] = []
-    changes_root = root / "specs" / "changes"
-    if not changes_root.is_dir():
-        return result
-    for directory in sorted(path for path in changes_root.iterdir() if path.is_dir()):
-        path = directory / "change.md"
-        if not path.is_file():
-            continue
-        text = without_fenced_blocks(path.read_text(encoding="utf-8"))
-        identifier = metadata(text, ("Change-ID",)).get("Change-ID")
-        lane = declared_lane(directory)
-        if identifier and lane:
-            result.append((identifier, lane))
-    return result
+    records, errors = discover_changes(root)
+    if errors:
+        raise ValueError("cannot select a verification lane: " + "; ".join(errors))
+    return [
+        (record.identifier, record.lane)
+        for record in records
+        if record.is_open
+    ]
 
 
 def all_active_lane(active: list[tuple[str, str]], completion_gate: bool) -> str:
@@ -96,11 +95,16 @@ def all_active_lane(active: list[tuple[str, str]], completion_gate: bool) -> str
 
 
 def load_commands(root: Path, lane: str) -> list[list[str]]:
-    config = json.loads((root / "sdd.config.json").read_text(encoding="utf-8"))
+    config = load_command_groups(root)
     selected: list[list[str]] = []
     for current in LANES[: LANES.index(lane) + 1]:
-        selected.extend(config["verification"][current])
+        selected.extend(config[current])
     return selected
+
+
+def load_command_groups(root: Path) -> dict[str, list[list[str]]]:
+    config = json.loads((root / "sdd.config.json").read_text(encoding="utf-8"))
+    return config["verification"]
 
 
 def resolve_executable(executable: str, root: Path) -> str | None:
@@ -145,11 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     selection.add_argument(
         "--all-active",
         action="store_true",
-        help="Select the highest working lane; Fast when none exist, or Standard for completion.",
+        help="Select the highest open lane; Fast when none exist, or Standard for completion.",
     )
     parser.add_argument(
         "--change",
-        help="Exact working Change-ID. Its declared lane is inferred when --lane is omitted.",
+        help="Exact open Change-ID. Its declared lane is inferred when --lane is omitted.",
     )
     parser.add_argument(
         "--require-configured",
@@ -163,24 +167,45 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Require the selected card, or every card globally, to be verified in an adopted project.",
     )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args(argv)
-    root = Path(__file__).resolve().parents[1]
+    root = args.root.resolve()
 
     if args.all_active and args.change:
         parser.error("--change cannot be combined with --all-active")
     if args.lane == "fast" and args.change:
         parser.error("--change is used only with Standard/Critical")
     if args.lane in {"standard", "critical"} and not args.change:
-        parser.error("--change is required for Standard/Critical")
+        adoption_preview = (
+            args.require_configured
+            and args.lane == "standard"
+            and not args.completion_gate
+        )
+        if not adoption_preview:
+            parser.error(
+                "--change is required for Standard/Critical, except the pre-adoption "
+                "--require-configured --lane standard check"
+            )
     if args.completion_gate and args.lane and not args.change:
         parser.error("global --completion-gate selects the highest working lane automatically")
     if args.lane is None and not args.all_active and not args.change:
         args.all_active = True
 
-    baseline = git_snapshot(root)
-    if baseline is None:
+    try:
+        control_baseline = control_snapshot(root)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"ERROR: cannot snapshot repository SDD state: {exc}", file=sys.stderr)
+        return 1
+    git_baseline = git_snapshot(root)
+    if git_baseline is None:
         print(
-            "NOTE: Git snapshot unavailable; optional working-tree mutation detection is skipped."
+            "NOTE: Git snapshot unavailable; broad working-tree mutation detection is skipped. "
+            "The repository SDD control plane is still protected."
         )
     spec_command = [sys.executable, str(root / "scripts" / "spec_check.py")]
     if args.require_configured:
@@ -192,19 +217,35 @@ def main(argv: list[str] | None = None) -> int:
     if run(spec_command, root) != 0:
         return 1
 
-    active = active_changes(root)
+    try:
+        active = active_changes(root)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    if (
+        args.require_configured
+        and args.lane == "standard"
+        and not args.change
+        and active
+    ):
+        print(
+            "ERROR: the no-card Standard adoption check requires no open change cards; "
+            "use --change for a first slice or the default highest-lane verifier.",
+            file=sys.stderr,
+        )
+        return 1
     selected_lane = args.lane
     scope = "manual"
     if args.all_active:
         selected_lane = all_active_lane(active, args.completion_gate)
-        scope = ",".join(identifier for identifier, _ in active) or "no-active-change"
+        scope = ",".join(identifier for identifier, _ in active) or "no-open-change"
     elif args.change:
         path = change_path(root, args.change)
         if path is None:
-            parser.error("--change must identify exactly one active change folder")
+            parser.error("--change must identify exactly one open change folder")
         declared = declared_lane(path)
         if declared is None:
-            parser.error("active change has no valid declared Lane")
+            parser.error("open change has no valid declared Lane")
         if selected_lane is not None and LANES.index(selected_lane) < LANES.index(declared):
             parser.error(
                 f"requested lane {selected_lane} is lower than {args.change}'s declared lane {declared}"
@@ -217,7 +258,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.completion_gate and LANES.index(selected_lane) < LANES.index("standard"):
         selected_lane = "standard"
     try:
-        commands = load_commands(root, selected_lane)
+        command_groups = load_command_groups(root)
+        commands: list[list[str]] = []
+        for current in LANES[: LANES.index(selected_lane) + 1]:
+            commands.extend(command_groups[current])
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
         print(f"ERROR: cannot load verification commands: {exc}", file=sys.stderr)
         return 1
@@ -225,7 +269,14 @@ def main(argv: list[str] | None = None) -> int:
     if not commands:
         print(
             "NOTE: no application-specific commands are configured for this lane; "
-            "baseline starter validation only."
+            "structural repository validation only."
+        )
+    if selected_lane == "critical":
+        inherited = len(command_groups["fast"]) + len(command_groups["standard"])
+        specific = len(command_groups["critical"])
+        print(
+            "Verification plan: lane=critical, "
+            f"inherited_commands={inherited}, critical_specific_commands={specific}"
         )
     failed_command: tuple[list[str], int] | None = None
     for command in commands:
@@ -234,11 +285,24 @@ def main(argv: list[str] | None = None) -> int:
             failed_command = (command, return_code)
             break
 
-    after = git_snapshot(root)
-    if baseline is not None and after is None:
+    try:
+        control_after = control_snapshot(root)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"ERROR: repository SDD state became unreadable: {exc}", file=sys.stderr)
+        return 1
+    if control_after != control_baseline:
+        print(
+            "ERROR: verification changed the repository SDD control plane. "
+            "Review specs, configuration, instructions, or verifier files.",
+            file=sys.stderr,
+        )
+        return 1
+
+    git_after = git_snapshot(root)
+    if git_baseline is not None and git_after is None:
         print("ERROR: Git snapshot became unavailable during verification.", file=sys.stderr)
         return 1
-    if baseline is not None and after != baseline:
+    if git_baseline is not None and git_after != git_baseline:
         print(
             "ERROR: verification changed the Git working tree. Review generated files, "
             "ignore expected artifacts, and restore unintended changes.",
@@ -258,7 +322,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     label = "Completion" if args.completion_gate else "Verification"
-    print(f"{label} PASS: lane={selected_lane}, scope={scope}, commands={1 + len(commands)}")
+    if commands:
+        print(
+            f"{label} PASS: lane={selected_lane}, scope={scope}, "
+            f"commands={1 + len(commands)}"
+        )
+    else:
+        print(
+            f"{label} STRUCTURAL PASS: lane={selected_lane}, scope={scope}, "
+            "application_commands=0"
+        )
     return 0
 
 

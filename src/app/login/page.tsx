@@ -1,11 +1,14 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginButton } from "@/components/auth/login-button";
 import { DevicePairingLogin } from "@/components/auth/device-pairing-login";
 import { auth, signIn } from "@/lib/auth";
 import { safeInternalRedirect } from "@/lib/safe-redirect";
+import { loginMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = loginMetadata;
 
 export default async function LoginPage({
   searchParams,

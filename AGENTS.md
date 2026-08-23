@@ -57,19 +57,33 @@ module). `mobile/` has its own tsconfig/eslint; root `tsc --noEmit` excludes
 | Test on emulator/device | `verify-android` |
 | Long-running local delivery | `vong-goal-workflow` |
 
-## Repository-native SDD
+## Repository-native SDD v2.6.1 Context-Lean
 
-- Before changing product behavior, read `sdd.config.json`, `specs/product.md`,
-  `specs/architecture/system.md`, and only the affected current domain spec.
-- Domain specs own current observable behavior; executable contracts own interface
-  shape; Drizzle schema and migrations own physical storage; tests provide evidence.
-- Use the lowest safe lane from the `repository-sdd` skill. Behavior-preserving work
-  is Fast; bounded behavior changes are Standard; auth, privacy, migrations,
-  destructive data, public compatibility, and cross-domain invariants are Critical.
-- Keep specs, code, and tests aligned. Treat disagreement between them as drift to
-  surface explicitly rather than silently choosing one source.
-- Run `python scripts/verify.py` during SDD work and the completion gate before
-  claiming a behavior change is ready.
+- For any product behavior, adoption, ideation, design, or product review, read and
+  follow `.agents/skills/repository-sdd/SKILL.md`. It is the canonical workflow; this
+  project file keeps only Vong-specific invariants.
+- Inspect `sdd.config.json` first. If `adopted` is false, bootstrap automatically and
+  require truthful current specs plus the real Standard application gate. Do not force
+  adoption for explanation, review-only, cosmetic, or behavior-preserving work.
+- Read product/system maps, only affected domain specs, nearby contracts/tests, and a
+  matching open card. Exclude `specs/changes/**` from broad inventories; finalized card
+  contents are audit-only, not ordinary context.
+- Domain specs own current behavior; executable contracts own interface shape; Drizzle
+  schema and migrations own physical storage; tests provide evidence. Reconcile drift.
+- Preserve the user's requested scope. Resolve repository facts first, ask only about a
+  material product decision, and use structured input when two or three real choices
+  exist. Critical work still requires risk/boundary/recovery, explicit approval, and a
+  fresh read-only completion review.
+- Treat an explicit public contract as closed scope. Do not add behavior or validation
+  outside it unless a stated safety boundary requires it.
+- Keep one writer per working copy. Use subagents only for independent exploration,
+  noisy analysis, or useful read-only review—not as mandatory ceremony.
+- Align current spec, code, tests, acceptance evidence, and experience evidence. For an
+  integrated card finalized in the same turn, let
+  `python scripts/finalize_change.py --all` own structural preflight, the configured
+  full lane, and lifecycle transition; do not run the same full gate first.
+- Local verification is authoritative. Report outcome, evidence, skipped checks, and
+  unresolved assumptions/risks; never claim an unrun check passed.
 
 ## Verification commands
 

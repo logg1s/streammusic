@@ -1,7 +1,7 @@
 # `CHG-20260819-7f2a9c31-listening-ui-redesign`
 
 Change-ID: `CHG-20260819-7f2a9c31`
-Status: verified
+Status: finalized
 Lane: standard
 Owner: Vong maintainers
 Affected-Specs: `PLAYBACK-001, PLAYBACK-004, LIBRARY-003, DISCOVERY-002, COLLECTIONS-001`

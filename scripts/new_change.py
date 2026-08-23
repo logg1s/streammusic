@@ -10,6 +10,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from change_lifecycle import is_link_like
 from spec_check import REQUIREMENT_ID, Report, validate_domain_specs
 
 
@@ -22,7 +23,11 @@ def normalize_slug(value: str) -> str:
 
 def validate_field(label: str, value: str) -> str:
     value = value.strip()
-    if not value or any(character in value for character in ("\r", "\n", "<", ">")):
+    if (
+        not value
+        or any(character in value for character in ("\r", "\n", "<", ">"))
+        or re.search(r"\b(?:TODO|TBD)\b", value, re.IGNORECASE)
+    ):
         raise ValueError(f"{label} must be a resolved, single-line value")
     return value
 
@@ -38,7 +43,12 @@ def validate_affected(root: Path, value: str) -> str:
     ):
         raise ValueError("affected specs must contain current IDs, new:<REQUIREMENT-ID>, or new")
     discovery_report = Report()
-    requirement_ids, spec_ids = validate_domain_specs(root, discovery_report)
+    requirement_ids, spec_ids, _ = validate_domain_specs(root, discovery_report)
+    if discovery_report.errors:
+        raise ValueError(
+            "cannot create a change while domain specs are invalid: "
+            + "; ".join(discovery_report.errors)
+        )
     for token in tokens:
         if token.lower() == "new" or token.startswith("new:"):
             continue
@@ -51,6 +61,21 @@ def validate_affected(root: Path, value: str) -> str:
         )
         raise ValueError(f"affected specs reference '{token}' is unknown; {guidance}")
     return ", ".join(tokens)
+
+
+def require_contained_unlinked(root: Path, path: Path, label: str) -> None:
+    root = root.resolve()
+    try:
+        path.resolve().relative_to(root)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError(f"{label} escapes the repository") from exc
+    current = path
+    while current != root:
+        if current.exists() and is_link_like(current):
+            raise ValueError(f"{label} must not use a symlink or junction")
+        if current.parent == current:
+            break
+        current = current.parent
 
 
 def new_change_id(changes_root: Path) -> str:
@@ -71,6 +96,7 @@ def create_change(
     decision_owner: str | None,
     affected_specs: str,
 ) -> Path:
+    root = root.resolve()
     if lane not in {"standard", "critical"}:
         raise ValueError("lane must be standard or critical")
     if lane == "critical" and not decision_owner:
@@ -78,12 +104,16 @@ def create_change(
     slug = normalize_slug(slug)
     owner = validate_field("owner", owner)
     decision_owner = validate_field("decision owner", decision_owner or owner)
-    affected_specs = validate_affected(root, affected_specs)
     changes_root = root / "specs" / "changes"
+    if not changes_root.is_dir():
+        raise FileNotFoundError(f"missing changes directory: {changes_root}")
+    require_contained_unlinked(root, changes_root, "specs/changes")
     template_name = "critical-change.md" if lane == "critical" else "change.md"
     template = root / "specs" / "templates" / template_name
     if not template.is_file():
         raise FileNotFoundError(f"missing template: {template}")
+    require_contained_unlinked(root, template, "change template")
+    affected_specs = validate_affected(root, affected_specs)
     content = template.read_text(encoding="utf-8")
     required_tokens = {
         "CHG-YYYYMMDD-xxxxxxxx-short-slug",

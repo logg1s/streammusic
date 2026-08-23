@@ -5,11 +5,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote
+
+from change_lifecycle import (
+    CHANGE_DIR,
+    CHANGE_ID_PATTERN,
+    COMPLETE_STATUSES,
+    FINALIZED_STATUSES,
+    OPEN_STATUSES,
+    VALID_LANES,
+    VALID_STATUSES,
+    VERIFIED_STATUSES,
+    WORKING_STATUSES,
+    clean_value,
+    discover_changes,
+    is_link_like,
+    metadata,
+    metadata_count,
+    without_fenced_blocks,
+)
 
 
 REQUIREMENT_ID = re.compile(r"^[A-Z][A-Z0-9-]*-\d{3}$")
@@ -18,10 +37,6 @@ DOMAIN_HEADING = re.compile(
 )
 DOMAIN_AC_LINE = re.compile(
     r"^-\s+`?(AC-([A-Z][A-Z0-9-]*-\d{3})-(\d{2}))`?:\s+\S", re.MULTILINE
-)
-CHANGE_ID_PATTERN = r"CHG-(?:\d{3}|\d{8}-[a-f0-9]{8})"
-CHANGE_DIR = re.compile(
-    rf"^({CHANGE_ID_PATTERN})-[a-z0-9]+(?:-[a-z0-9]+)*$"
 )
 CHANGE_AC_LINE = re.compile(
     rf"^- \[([ xX])\]\s+`?AC-({CHANGE_ID_PATTERN})-\d{{2}}`?:\s+\S",
@@ -56,8 +71,6 @@ CHANGE_HEADING_ALIASES = {
     "Rollout and Recovery": ("Rollout and Recovery", "Rollout and Rollback"),
     "Review": ("Review", "Approval"),
 }
-VALID_STATUSES = {"draft", "active", "approved", "implementing", "verified"}
-VALID_LANES = {"standard", "critical"}
 HTML_TAGS = {
     "a", "abbr", "b", "blockquote", "br", "code", "dd", "details", "div", "dl",
     "dt", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "kbd",
@@ -68,6 +81,9 @@ SDD_TOOL_PATHS = (
     "scripts/spec_check.py",
     "scripts/verify.py",
     "scripts/new_change.py",
+    "scripts/change_lifecycle.py",
+    "scripts/sdd_status.py",
+    "scripts/finalize_change.py",
 )
 
 
@@ -77,6 +93,10 @@ class Report:
     warnings: list[str] = field(default_factory=list)
     domain_specs: int = 0
     active_changes: int = 0
+    working_changes: int = 0
+    verified_changes: int = 0
+    finalized_changes: int = 0
+    open_critical_changes: int = 0
     requirements: int = 0
 
     @property
@@ -84,26 +104,38 @@ class Report:
         return not self.errors
 
 
-def clean_value(value: str) -> str:
-    return value.strip().strip("`").strip()
-
-
-def without_fenced_blocks(text: str) -> str:
-    result: list[str] = []
-    fence: str | None = None
-    for line in text.splitlines():
-        stripped = line.lstrip()
-        if fence is None and (stripped.startswith("```") or stripped.startswith("~~~")):
-            fence = stripped[:3]
-            result.append("")
-        elif fence is not None and stripped.startswith(fence):
-            fence = None
-            result.append("")
-        elif fence is None:
-            result.append(line)
-        else:
-            result.append("")
-    return "\n".join(result)
+def read_utf8(path: Path, root: Path, report: Report) -> str | None:
+    try:
+        resolved_root = root.resolve()
+        resolved = path.resolve()
+        resolved.relative_to(resolved_root)
+        current = path
+        while current != resolved_root:
+            if is_link_like(current):
+                raise ValueError("linked path is not allowed")
+            if current.parent == current:
+                break
+            current = current.parent
+    except (OSError, RuntimeError, ValueError) as exc:
+        try:
+            label = path.relative_to(root)
+        except ValueError:
+            label = path
+        message = f"{label}: file must stay inside the repository: {exc}"
+        if message not in report.errors:
+            report.errors.append(message)
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        try:
+            label = path.relative_to(root)
+        except ValueError:
+            label = path
+        message = f"{label}: cannot read UTF-8 text: {exc}"
+        if message not in report.errors:
+            report.errors.append(message)
+        return None
 
 
 def markdown_link_targets(text: str) -> list[str]:
@@ -132,16 +164,6 @@ def markdown_link_targets(text: str) -> list[str]:
         else:
             break
     return targets
-
-
-def metadata(text: str, keys: tuple[str, ...]) -> dict[str, str]:
-    result: dict[str, str] = {}
-    header = re.split(r"^##\s+", text, maxsplit=1, flags=re.MULTILINE)[0]
-    for key in keys:
-        match = re.search(rf"^{re.escape(key)}:\s*(.+?)\s*$", header, re.MULTILINE)
-        if match:
-            result[key] = clean_value(match.group(1))
-    return result
 
 
 def section(text: str, heading: str) -> str:
@@ -204,9 +226,12 @@ def load_config(root: Path, report: Report) -> dict:
     if not path.is_file():
         report.errors.append("sdd.config.json: missing")
         return {}
+    raw_config = read_utf8(path, root, report)
+    if raw_config is None:
+        return {}
     try:
-        config = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        config = json.loads(raw_config)
+    except json.JSONDecodeError as exc:
         report.errors.append(f"sdd.config.json: invalid JSON: {exc}")
         return {}
     if not isinstance(config, dict):
@@ -214,6 +239,17 @@ def load_config(root: Path, report: Report) -> dict:
         return {}
     if config.get("version") != 1:
         report.errors.append("sdd.config.json: version must be 1")
+    trace_all = config.get("require_test_traceability", False)
+    if not isinstance(trace_all, bool):
+        report.errors.append("sdd.config.json: require_test_traceability must be true or false")
+    required_test_ids = config.get("required_test_ids", [])
+    if (
+        not isinstance(required_test_ids, list)
+        or not all(isinstance(item, str) and item.strip() for item in required_test_ids)
+    ):
+        report.errors.append("sdd.config.json: required_test_ids must be an array of IDs")
+    elif len(required_test_ids) != len(set(required_test_ids)):
+        report.errors.append("sdd.config.json: required_test_ids must not contain duplicates")
     verification = config.get("verification")
     if not isinstance(verification, dict):
         report.errors.append("sdd.config.json: verification must be an object")
@@ -252,7 +288,9 @@ def validate_skill(root: Path, report: Report) -> None:
     if not path.is_file():
         report.errors.append(".agents/skills/repository-sdd/SKILL.md: missing")
         return
-    text = path.read_text(encoding="utf-8")
+    text = read_utf8(path, root, report)
+    if text is None:
+        return
     if "TODO" in text or "[TODO" in text:
         report.errors.append(f"{path.relative_to(root)}: unresolved scaffold TODO")
     frontmatter = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
@@ -267,22 +305,29 @@ def validate_skill(root: Path, report: Report) -> None:
 
 def validate_domain_specs(
     root: Path, report: Report, require_resolved: bool = False
-) -> tuple[set[str], set[str]]:
+) -> tuple[set[str], set[str], set[str]]:
     declared: dict[str, Path] = {}
     declared_acceptance: dict[str, Path] = {}
     spec_ids: set[str] = set()
     domain_root = root / "specs" / "domains"
     paths = sorted(domain_root.glob("*/spec.md")) if domain_root.is_dir() else []
-    report.domain_specs = len(paths)
+    report.domain_specs = 0
 
     for path in paths:
         relative = path.relative_to(root)
-        text = without_fenced_blocks(path.read_text(encoding="utf-8"))
+        raw_text = read_utf8(path, root, report)
+        if raw_text is None:
+            continue
+        report.domain_specs += 1
+        text = without_fenced_blocks(raw_text)
         if require_resolved and is_placeholder(text):
             report.errors.append(f"{relative}: unresolved placeholder in current domain spec")
         values = metadata(text, DOMAIN_METADATA)
         for key in DOMAIN_METADATA:
-            if key not in values or is_placeholder(values.get(key, "")):
+            count = metadata_count(text, key)
+            if count > 1:
+                report.errors.append(f"{relative}: duplicate header metadata {key}")
+            elif key not in values or is_placeholder(values.get(key, "")):
                 report.errors.append(f"{relative}: missing or placeholder {key}")
         spec_id = values.get("Spec-ID", "")
         if spec_id:
@@ -297,10 +342,16 @@ def validate_domain_specs(
         requirements = DOMAIN_HEADING.findall(text)
         if not requirements:
             report.errors.append(f"{relative}: no requirement heading such as `DOMAIN-001`")
+        requirement_set = set(requirements)
         acceptance_for: set[str] = set()
         for match in DOMAIN_AC_LINE.finditer(text):
             acceptance_id = match.group(1)
             requirement_id = match.group(2)
+            if requirement_id not in requirement_set:
+                report.errors.append(
+                    f"{relative}: acceptance ID {acceptance_id} has no matching requirement heading"
+                )
+                continue
             acceptance_for.add(requirement_id)
             if acceptance_id in declared_acceptance:
                 first = declared_acceptance[acceptance_id].relative_to(root)
@@ -327,7 +378,7 @@ def validate_domain_specs(
                 )
 
     report.requirements = len(declared)
-    return set(declared), spec_ids
+    return set(declared), spec_ids, set(declared_acceptance)
 
 
 def validate_affected_refs(
@@ -346,13 +397,13 @@ def validate_affected_refs(
         if token.lower() == "new":
             if not allow_new:
                 report.errors.append(
-                    f"{relative}: verified change must replace 'new' with a current Spec-ID or requirement ID"
+                    f"{relative}: completed change must replace 'new' with a current Spec-ID or requirement ID"
                 )
             continue
         if token.startswith("new:") and REQUIREMENT_ID.fullmatch(token[4:]):
             if not allow_new:
                 report.errors.append(
-                    f"{relative}: verified change must reconcile {token} into current domain specs"
+                    f"{relative}: completed change must reconcile {token} into current domain specs"
                 )
             continue
         if token in requirement_ids or token in spec_ids:
@@ -371,14 +422,38 @@ def validate_changes(
     completion_change: str | None = None,
 ) -> None:
     changes_root = root / "specs" / "changes"
-    directories = sorted(path for path in changes_root.iterdir() if path.is_dir()) if changes_root.is_dir() else []
-    report.active_changes = len(directories)
+    try:
+        if is_link_like(changes_root):
+            report.errors.append(
+                "specs/changes: folder must not be a symlink or junction"
+            )
+            return
+        resolved_changes_root = changes_root.resolve()
+        resolved_changes_root.relative_to(root.resolve())
+        directories = (
+            sorted(path for path in changes_root.iterdir() if path.is_dir())
+            if changes_root.is_dir()
+            else []
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        report.errors.append(f"specs/changes: cannot safely read folder: {exc}")
+        return
 
     change_ids: dict[str, Path] = {}
     affected_by: dict[str, list[tuple[str, str]]] = {}
     completion_change_found = False
     for directory in directories:
         relative_dir = directory.relative_to(root)
+        try:
+            directory.resolve().relative_to(resolved_changes_root)
+        except (OSError, RuntimeError, ValueError):
+            report.errors.append(f"{relative_dir}: change folder escapes specs/changes")
+            continue
+        if is_link_like(directory):
+            report.errors.append(
+                f"{relative_dir}: change folder must not be a symlink or junction"
+            )
+            continue
         folder_match = CHANGE_DIR.fullmatch(directory.name)
         if not folder_match:
             report.errors.append(
@@ -396,17 +471,23 @@ def validate_changes(
         else:
             change_ids[expected_id] = directory
         path = directory / "change.md"
-        if not path.is_file():
-            report.errors.append(f"{relative_dir}: missing change.md")
+        if not path.is_file() or is_link_like(path):
+            report.errors.append(f"{relative_dir}: missing regular change.md")
             continue
         relative = path.relative_to(root)
-        text = without_fenced_blocks(path.read_text(encoding="utf-8"))
+        raw_text = read_utf8(path, root, report)
+        if raw_text is None:
+            continue
+        text = without_fenced_blocks(raw_text)
         values = metadata(text, CRITICAL_CHANGE_METADATA)
         status = values.get("Status", "").lower()
         lane = values.get("Lane", "").lower()
         required_metadata = (
             CRITICAL_CHANGE_METADATA if lane == "critical" else STANDARD_CHANGE_METADATA
         )
+        for key in CRITICAL_CHANGE_METADATA:
+            if metadata_count(text, key) > 1:
+                report.errors.append(f"{relative}: duplicate header metadata {key}")
         for key in required_metadata:
             if key not in values or is_placeholder(values.get(key, "")):
                 report.errors.append(f"{relative}: missing or placeholder {key}")
@@ -416,17 +497,27 @@ def validate_changes(
             )
         if status not in VALID_STATUSES:
             report.errors.append(f"{relative}: invalid Status '{status}'")
-        elif (
-            completion_gate
-            and (completion_change is None or completion_change == expected_id)
-            and status != "verified"
-        ):
-            report.errors.append(
-                f"{relative}: completion gate requires Status verified, got {status}"
-            )
         if lane not in VALID_LANES:
             report.errors.append(f"{relative}: invalid Lane '{lane}'")
-        resolved_statuses = {"active", "approved", "implementing", "verified"}
+        if status in WORKING_STATUSES:
+            report.working_changes += 1
+        elif status in VERIFIED_STATUSES:
+            report.verified_changes += 1
+        elif status in FINALIZED_STATUSES:
+            report.finalized_changes += 1
+        if status in OPEN_STATUSES and lane == "critical":
+            report.open_critical_changes += 1
+        if completion_gate:
+            selected_for_completion = (
+                completion_change == expected_id
+                if completion_change is not None
+                else status in OPEN_STATUSES
+            )
+            if selected_for_completion and status != "verified":
+                report.errors.append(
+                    f"{relative}: completion gate requires Status verified, got {status}"
+                )
+        resolved_statuses = (OPEN_STATUSES - {"draft"}) | FINALIZED_STATUSES
         if status in resolved_statuses and is_placeholder(text):
             report.errors.append(f"{relative}: status {status} cannot contain unresolved placeholders")
         headings = {match.group(1).strip().lower() for match in re.finditer(r"^##\s+(.+?)\s*$", text, re.MULTILINE)}
@@ -457,15 +548,16 @@ def validate_changes(
         )
         for acceptance_id in duplicates:
             report.errors.append(f"{relative}: duplicate acceptance ID {acceptance_id}")
-        validate_affected_refs(
-            values.get("Affected-Specs", ""),
-            relative,
-            requirement_ids,
-            spec_ids,
-            report,
-            allow_new=status != "verified",
-        )
-        if status in VALID_STATUSES:
+        if status not in FINALIZED_STATUSES:
+            validate_affected_refs(
+                values.get("Affected-Specs", ""),
+                relative,
+                requirement_ids,
+                spec_ids,
+                report,
+                allow_new=status not in COMPLETE_STATUSES,
+            )
+        if status in OPEN_STATUSES:
             for raw_token in values.get("Affected-Specs", "").split(","):
                 token = clean_value(raw_token)
                 if not token or token.lower() == "new":
@@ -480,11 +572,11 @@ def validate_changes(
         if lane == "critical" and not plan_checks:
             report.errors.append(f"{relative}: Plan must contain at least one checkbox task")
         evidence = change_section(text, "Verification Evidence")
-        if status == "verified":
+        if status in COMPLETE_STATUSES:
             if any(match.group(1) == " " for match in acceptance_matches):
-                report.errors.append(f"{relative}: verified change has unchecked acceptance criteria")
+                report.errors.append(f"{relative}: completed change has unchecked acceptance criteria")
             if plan_checks and any(check == " " for check in plan_checks):
-                report.errors.append(f"{relative}: verified change has unchecked plan tasks")
+                report.errors.append(f"{relative}: completed change has unchecked plan tasks")
             evidence_rows = verification_rows(evidence)
             evidence_results = [row[1] for row in evidence_rows]
             unresolved_evidence = any(
@@ -503,10 +595,57 @@ def validate_changes(
                     )
                     for result in evidence_results
                 )
-            ):
+                ):
                 report.errors.append(
-                    f"{relative}: verified change requires resolved, successful verification evidence"
+                    f"{relative}: completed change requires resolved, successful verification evidence"
                 )
+            # v2.2 validates the product evidence before finalization. Historical
+            # finalized cards remain inert so repositories can upgrade without
+            # rewriting evidence that already passed the earlier completion gate.
+            if status in VERIFIED_STATUSES:
+                passing_rows = [
+                    row
+                    for row in evidence_rows
+                    if len(row) >= 2
+                    and re.fullmatch(
+                        r"(?:pass|passed|ok|success|successful|exit\s*=?\s*0|0)",
+                        row[1],
+                    )
+                ]
+                outcome_rows = [
+                    row
+                    for row in passing_rows
+                    if row and re.match(r"^outcome\s*:", row[0])
+                ]
+                uncovered_acceptance = sorted(
+                    acceptance_id
+                    for acceptance_id in set(declared_change_acceptance)
+                    if not any(
+                        acceptance_id.lower() in " ".join(row) for row in outcome_rows
+                    )
+                )
+                if uncovered_acceptance:
+                    report.errors.append(
+                        f"{relative}: completed change requires passing Outcome evidence "
+                        f"naming {', '.join(uncovered_acceptance)}"
+                    )
+                experience_rows = [
+                    row
+                    for row in passing_rows
+                    if row and re.match(r"^experience\s*:", row[0])
+                ]
+                if not experience_rows:
+                    report.errors.append(
+                        f"{relative}: completed change requires a passing Experience evidence row"
+                    )
+                elif any(
+                    re.match(r"^experience\s*:\s*n/?a\b", row[0])
+                    and (len(row) < 3 or not re.match(r"^local\s*:\s*\S", row[2]))
+                    for row in experience_rows
+                ):
+                    report.errors.append(
+                        f"{relative}: Experience N/A requires 'local: <why no user-facing surface changed>' evidence"
+                    )
 
         if lane == "critical":
             review = change_section(text, "Review")
@@ -546,7 +685,19 @@ def validate_changes(
                     report.errors.append(
                         f"{relative}: Critical '{label}' N/A needs an explicit reason"
                     )
-            if status == "verified":
+            if status in COMPLETE_STATUSES:
+                risk_rows = [
+                    row
+                    for row in evidence_rows
+                    if len(row) >= 3
+                    and re.match(r"^risk(?:-specific)?\s*:", row[0])
+                    and re.match(r"^local\s*:\s*\S", row[2])
+                ]
+                if not risk_rows:
+                    report.errors.append(
+                        f"{relative}: completed Critical change requires a passing "
+                        "'Risk: ... | pass | local: ...' evidence row"
+                    )
                 review_match = re.search(
                     r"^-\s*(?:Critical )?fresh-context review:\s*(.+)$",
                     review,
@@ -555,19 +706,21 @@ def validate_changes(
                 review_value = review_match.group(1).strip() if review_match else ""
                 if not re.match(r"^(pass|passed|approved)\b", review_value, re.IGNORECASE):
                     report.errors.append(
-                        f"{relative}: verified Critical change requires 'Fresh-context review: passed ...'"
+                        f"{relative}: completed Critical change requires 'Fresh-context review: passed ...'"
                     )
+
+    report.active_changes = report.working_changes + report.verified_changes
 
     for affected_id, changes in sorted(affected_by.items()):
         if len(changes) < 2:
             continue
         details = ", ".join(f"{change_id} ({owner})" for change_id, owner in changes)
         report.warnings.append(
-            f"coordination: {affected_id} is touched by multiple working changes: {details}"
+            f"coordination: {affected_id} is touched by multiple open changes: {details}"
         )
     if completion_gate and completion_change and not completion_change_found:
         report.errors.append(
-            f"completion gate: working change {completion_change} was not found"
+            f"completion gate: change {completion_change} was not found"
         )
 
 
@@ -576,8 +729,28 @@ def validate_markdown_links(root: Path, report: Report) -> None:
     if not specs_root.is_dir():
         report.errors.append("specs/: missing")
         return
-    for path in sorted(specs_root.rglob("*.md")):
-        text = without_fenced_blocks(path.read_text(encoding="utf-8"))
+    records, _ = discover_changes(root)
+    finalized_roots = {
+        record.directory for record in records if record.status in FINALIZED_STATUSES
+    }
+    for path in contained_tree_files(
+        specs_root,
+        root,
+        report,
+        suffix=".md",
+        skip_roots=finalized_roots,
+    ):
+        resolved_path = path.resolve()
+        if any(
+            resolved_path == finalized_root
+            or finalized_root in resolved_path.parents
+            for finalized_root in finalized_roots
+        ):
+            continue
+        raw_text = read_utf8(path, root, report)
+        if raw_text is None:
+            continue
+        text = without_fenced_blocks(raw_text)
         for raw_target in markdown_link_targets(text):
             raw = raw_target.strip()
             if raw.startswith("<") and ">" in raw:
@@ -589,12 +762,12 @@ def validate_markdown_links(root: Path, report: Report) -> None:
             target = unquote(target.split("#", 1)[0])
             if not target or "<" in target or ">" in target:
                 continue
-            resolved = (path.parent / target).resolve()
             try:
+                resolved = (path.parent / target).resolve()
                 resolved.relative_to(root.resolve())
-            except ValueError:
+            except (OSError, RuntimeError, ValueError):
                 report.errors.append(
-                    f"{path.relative_to(root)}: local link escapes repository: {raw_target}"
+                    f"{path.relative_to(root)}: local link is unsafe or escapes repository: {raw_target}"
                 )
                 continue
             if not resolved.exists():
@@ -603,10 +776,88 @@ def validate_markdown_links(root: Path, report: Report) -> None:
                 )
 
 
+def contained_tree_files(
+    tree: Path,
+    root: Path,
+    report: Report,
+    suffix: str,
+    skip_roots: set[Path] | None = None,
+) -> list[Path]:
+    """List contained regular files while pruning links and junction escapes."""
+    root = root.resolve()
+    skip_roots = {path.resolve() for path in (skip_roots or set())}
+    files: list[Path] = []
+    try:
+        tree.resolve().relative_to(root)
+        if is_link_like(tree):
+            raise ValueError("linked tree is not allowed")
+    except (OSError, RuntimeError, ValueError) as exc:
+        report.errors.append(f"{tree.relative_to(root)}: unsafe repository tree: {exc}")
+        return files
+    for current, directory_names, file_names in os.walk(tree, followlinks=False):
+        current_path = Path(current)
+        safe_directories: list[str] = []
+        for name in sorted(directory_names):
+            candidate = current_path / name
+            try:
+                resolved = candidate.resolve()
+                resolved.relative_to(root)
+            except (OSError, RuntimeError, ValueError):
+                report.errors.append(
+                    f"{candidate.relative_to(root)}: directory escapes repository"
+                )
+                continue
+            if any(resolved == skip or skip in resolved.parents for skip in skip_roots):
+                continue
+            if is_link_like(candidate):
+                report.errors.append(
+                    f"{candidate.relative_to(root)}: linked directory is not allowed"
+                )
+                continue
+            safe_directories.append(name)
+        directory_names[:] = safe_directories
+        for name in sorted(file_names):
+            candidate = current_path / name
+            if candidate.suffix.lower() != suffix.lower():
+                continue
+            try:
+                candidate.resolve().relative_to(root)
+            except (OSError, RuntimeError, ValueError):
+                report.errors.append(
+                    f"{candidate.relative_to(root)}: file escapes repository"
+                )
+                continue
+            if is_link_like(candidate):
+                report.errors.append(
+                    f"{candidate.relative_to(root)}: linked file is not allowed"
+                )
+                continue
+            if candidate.is_file():
+                files.append(candidate)
+    return sorted(files)
+
+
 def validate_traceability(
-    root: Path, config: dict, requirement_ids: set[str], report: Report
+    root: Path,
+    config: dict,
+    requirement_ids: set[str],
+    acceptance_ids: set[str],
+    report: Report,
 ) -> None:
-    if not config.get("require_test_traceability", False):
+    required_ids = set(requirement_ids) if config.get("require_test_traceability") is True else set()
+    configured_ids = config.get("required_test_ids", [])
+    if isinstance(configured_ids, list):
+        allowed_ids = requirement_ids | acceptance_ids
+        for configured_id in configured_ids:
+            if not isinstance(configured_id, str) or not configured_id.strip():
+                continue
+            if configured_id not in allowed_ids:
+                report.errors.append(
+                    f"sdd.config.json: required_test_ids contains unknown current ID '{configured_id}'"
+                )
+                continue
+            required_ids.add(configured_id)
+    if not required_ids:
         return
     roots = config.get("test_roots", ["tests"])
     if not isinstance(roots, list) or not all(isinstance(item, str) for item in roots):
@@ -614,7 +865,8 @@ def validate_traceability(
         return
     evidence = ""
     extensions = {
-        ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".kt", ".go",
+        ".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts",
+        ".java", ".kt", ".go",
         ".rs", ".rb", ".cs", ".swift", ".feature",
     }
     forbidden_roots = {"specs", "docs", "examples", ".agents", ".codex", ".claude"}
@@ -630,12 +882,34 @@ def validate_traceability(
                 f"sdd.config.json: unsafe/non-test traceability root '{configured_root}'"
             )
             continue
-        path = (root / relative_root).resolve()
+        configured_path = root / relative_root
+        current_component = root
+        linked_component: Path | None = None
+        for part in relative_root.parts:
+            current_component = current_component / part
+            if is_link_like(current_component):
+                linked_component = current_component
+                break
+        if linked_component is not None:
+            report.errors.append(
+                "sdd.config.json: linked traceability root is not allowed: "
+                f"'{configured_root}'"
+            )
+            continue
         try:
-            path.relative_to(root.resolve())
-        except ValueError:
+            path = configured_path.resolve()
+            resolved_relative = path.relative_to(root.resolve())
+        except (OSError, RuntimeError, ValueError):
             report.errors.append(
                 f"sdd.config.json: traceability root escapes repository: '{configured_root}'"
+            )
+            continue
+        if (
+            resolved_relative.parts
+            and resolved_relative.parts[0].lower() in forbidden_roots
+        ):
+            report.errors.append(
+                f"sdd.config.json: resolved traceability root is not a test tree: '{configured_root}'"
             )
             continue
         if not path.is_dir():
@@ -643,24 +917,67 @@ def validate_traceability(
                 f"sdd.config.json: traceability root does not exist: '{configured_root}'"
             )
             continue
-        for candidate in path.rglob("*"):
-            relative_candidate = candidate.relative_to(root)
-            parts = {part.lower() for part in relative_candidate.parts[:-1]}
-            stem = candidate.stem.lower()
-            test_named = bool(
-                re.search(r"(^test_|_test$|\.test$|\.spec$|_spec$)", stem)
-            )
-            in_test_directory = bool(parts & {"test", "tests", "__tests__", "acceptance", "contract", "integration"})
-            if (
-                candidate.is_file()
-                and candidate.suffix.lower() in extensions
-                and (candidate.suffix.lower() == ".feature" or test_named or in_test_directory)
-            ):
+        escaped: set[Path] = set()
+        for current, directory_names, file_names in os.walk(path, followlinks=False):
+            current_path = Path(current)
+            safe_directories: list[str] = []
+            for name in directory_names:
+                candidate_directory = current_path / name
                 try:
-                    evidence += "\n" + candidate.read_text(encoding="utf-8")
-                except UnicodeDecodeError:
+                    candidate_directory.resolve().relative_to(root.resolve())
+                except (OSError, RuntimeError, ValueError):
+                    if candidate_directory not in escaped:
+                        report.errors.append(
+                            "traceability: path escapes repository: "
+                            f"{candidate_directory.relative_to(root)}"
+                        )
+                        escaped.add(candidate_directory)
                     continue
-    for requirement_id in sorted(requirement_ids):
+                if is_link_like(candidate_directory):
+                    report.errors.append(
+                        f"traceability: symlinked test directory is not allowed: {candidate_directory.relative_to(root)}"
+                    )
+                    continue
+                safe_directories.append(name)
+            directory_names[:] = safe_directories
+            for name in file_names:
+                candidate = current_path / name
+                try:
+                    candidate.resolve().relative_to(root.resolve())
+                except (OSError, RuntimeError, ValueError):
+                    report.errors.append(
+                        f"traceability: file escapes repository: {candidate.relative_to(root)}"
+                    )
+                    continue
+                if is_link_like(candidate):
+                    report.errors.append(
+                        f"traceability: symlinked test file is not allowed: {candidate.relative_to(root)}"
+                    )
+                    continue
+                relative_candidate = candidate.relative_to(root)
+                parts = {part.lower() for part in relative_candidate.parts[:-1]}
+                stem = candidate.stem.lower()
+                test_named = bool(
+                    re.search(r"(^test_|_test$|\.test$|\.spec$|_spec$)", stem)
+                )
+                in_test_directory = bool(
+                    parts
+                    & {"test", "tests", "__tests__", "acceptance", "contract", "integration"}
+                )
+                if (
+                    candidate.is_file()
+                    and candidate.suffix.lower() in extensions
+                    and (
+                        candidate.suffix.lower() == ".feature"
+                        or test_named
+                        or in_test_directory
+                    )
+                ):
+                    try:
+                        evidence += "\n" + candidate.read_text(encoding="utf-8")
+                    except (OSError, UnicodeError):
+                        continue
+    for requirement_id in sorted(required_ids):
         if not re.search(
             rf"(?<![A-Z0-9-]){re.escape(requirement_id)}(?![A-Z0-9-])", evidence
         ):
@@ -688,7 +1005,9 @@ def validate_repository(
         )
     require_resolved = require_configured or adopted or completion_gate
     validate_skill(root, report)
-    requirement_ids, spec_ids = validate_domain_specs(root, report, require_resolved)
+    requirement_ids, spec_ids, acceptance_ids = validate_domain_specs(
+        root, report, require_resolved
+    )
     validate_changes(
         root,
         requirement_ids,
@@ -697,18 +1016,34 @@ def validate_repository(
         completion_gate,
         completion_change,
     )
+    verification_config = config.get("verification", {}) if isinstance(config, dict) else {}
+    if (
+        report.open_critical_changes
+        and isinstance(verification_config, dict)
+        and verification_config.get("critical") == []
+    ):
+        report.warnings.append(
+            "verification: open Critical work has no Critical-specific command; "
+            "Standard commands are inherited and risk-specific local evidence is still required"
+        )
+    if report.verified_changes:
+        report.warnings.append(
+            f"lifecycle: {report.verified_changes} verified change(s) remain open; "
+            "after combined integration, run finalize_change.py --all"
+        )
     validate_markdown_links(root, report)
-    validate_traceability(root, config, requirement_ids, report)
+    validate_traceability(root, config, requirement_ids, acceptance_ids, report)
     if require_resolved:
         verification = config.get("verification", {}) if isinstance(config, dict) else {}
         if not isinstance(verification, dict):
             verification = {}
-        if not verification.get("standard"):
+        standard_commands = verification.get("standard")
+        if not isinstance(standard_commands, list) or not standard_commands:
             report.errors.append(
                 "sdd.config.json: configure at least one Standard project command before adoption"
             )
         else:
-            for index, command in enumerate(verification.get("standard", [])):
+            for index, command in enumerate(standard_commands):
                 if (
                     isinstance(command, list)
                     and all(isinstance(argument, str) for argument in command)
@@ -728,8 +1063,12 @@ def validate_repository(
             path = root / relative
             if not path.is_file():
                 report.errors.append(f"{relative.as_posix()}: missing before adoption")
-            elif is_placeholder(without_fenced_blocks(path.read_text(encoding="utf-8"))):
-                report.errors.append(f"{relative.as_posix()}: unresolved live placeholder before adoption")
+            else:
+                raw_text = read_utf8(path, root, report)
+                if raw_text is not None and is_placeholder(without_fenced_blocks(raw_text)):
+                    report.errors.append(
+                        f"{relative.as_posix()}: unresolved live placeholder before adoption"
+                    )
     return report
 
 
@@ -744,7 +1083,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="Emit a machine-readable report.")
     parser.add_argument(
         "--change",
-        help="With --completion-gate, require only this working Change-ID to be verified.",
+        help="With --completion-gate, require only this open Change-ID to be verified.",
     )
     parser.add_argument(
         "--completion-gate",
@@ -770,6 +1109,9 @@ def main(argv: list[str] | None = None) -> int:
         "counts": {
             "domain_specs": report.domain_specs,
             "active_changes": report.active_changes,
+            "working_changes": report.working_changes,
+            "verified_changes": report.verified_changes,
+            "finalized_changes": report.finalized_changes,
             "requirements": report.requirements,
         },
     }
@@ -784,7 +1126,8 @@ def main(argv: list[str] | None = None) -> int:
         counts = payload["counts"]
         print(
             f"SDD check {state}: {counts['domain_specs']} domain spec(s), "
-            f"{counts['requirements']} requirement(s), {counts['active_changes']} active change(s)."
+            f"{counts['requirements']} requirement(s), {counts['working_changes']} working, "
+            f"{counts['verified_changes']} verified, {counts['finalized_changes']} finalized change(s)."
         )
     return 0 if report.ok else 1
 

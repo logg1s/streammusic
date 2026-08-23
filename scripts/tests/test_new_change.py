@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -75,6 +77,20 @@ def write_templates(root: Path) -> None:
     (template.parent / "critical-change.md").write_text(CRITICAL_TEMPLATE, encoding="utf-8")
 
 
+def link_directory(target: Path, link: Path) -> None:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise OSError(result.stderr or result.stdout)
+    else:
+        os.symlink(target, link, target_is_directory=True)
+
+
 class NewChangeTests(unittest.TestCase):
     def test_creates_unique_changes_without_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -119,6 +135,29 @@ class NewChangeTests(unittest.TestCase):
                 )
             self.assertEqual(list(changes.iterdir()), [])
 
+    def test_rejects_placeholder_owners_before_creating_a_folder(self) -> None:
+        cases = (
+            ("standard", "TODO", None),
+            ("critical", "team-a", "TBD"),
+        )
+        for lane, owner, decision_owner in cases:
+            with self.subTest(lane=lane), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                write_templates(root)
+                changes = root / "specs/changes"
+                changes.mkdir(parents=True)
+
+                with self.assertRaisesRegex(ValueError, "resolved, single-line"):
+                    create_change(
+                        root,
+                        "Placeholder owner",
+                        lane,
+                        owner,
+                        decision_owner,
+                        "new:ACCOUNTS-001",
+                    )
+                self.assertEqual(list(changes.iterdir()), [])
+
     def test_rejects_invalid_lane_before_creating_a_folder(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -136,6 +175,58 @@ class NewChangeTests(unittest.TestCase):
                     "new:ACCOUNTS-001",
                 )
             self.assertEqual(list(changes.iterdir()), [])
+
+    def test_rejects_linked_changes_root_without_writing_outside_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "repo"
+            write_templates(root)
+            external = base / "external-changes"
+            external.mkdir()
+            try:
+                link_directory(external, root / "specs/changes")
+            except OSError as exc:
+                self.skipTest(f"directory links are unavailable: {exc}")
+
+            with self.assertRaisesRegex(ValueError, "symlink or junction|escapes"):
+                create_change(
+                    root,
+                    "Outside write",
+                    "standard",
+                    "team-a",
+                    None,
+                    "new:ACCOUNTS-001",
+                )
+
+            self.assertEqual(list(external.iterdir()), [])
+
+    def test_rejects_linked_template_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "repo"
+            write_templates(root)
+            (root / "specs/changes").mkdir()
+            external = base / "external-templates"
+            external.mkdir()
+            (external / "change.md").write_text(TEMPLATE, encoding="utf-8")
+            (external / "critical-change.md").write_text(
+                CRITICAL_TEMPLATE, encoding="utf-8"
+            )
+            shutil.rmtree(root / "specs/templates")
+            try:
+                link_directory(external, root / "specs/templates")
+            except OSError as exc:
+                self.skipTest(f"directory links are unavailable: {exc}")
+
+            with self.assertRaisesRegex(ValueError, "symlink or junction|escapes"):
+                create_change(
+                    root,
+                    "Linked template",
+                    "standard",
+                    "team-a",
+                    None,
+                    "new:ACCOUNTS-001",
+                )
 
     def test_critical_requires_an_explicit_decision_owner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

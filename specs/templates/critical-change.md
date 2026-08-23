@@ -9,7 +9,7 @@ Affected-Specs: `<DOMAIN-001, DOMAIN-002, or new>`
 
 ## Intent
 
-Describe the user or business outcome and why this risk is justified.
+Describe the user or business outcome, material assumption/non-goal, and why this risk is justified.
 
 ## Behavior Change
 
@@ -40,13 +40,18 @@ Describe the user or business outcome and why this risk is justified.
 
 - [ ] Update affected current specs or contracts.
 - [ ] Implement and test the smallest complete behavior.
-- [ ] Run Critical verification.
+- [ ] Run configured repository verification and risk-specific local checks.
 
 ## Verification Evidence
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| `<project check>` | pending | `<summary or link>` |
+| `Outcome: AC-CHG-YYYYMMDD-xxxxxxxx-01, AC-CHG-YYYYMMDD-xxxxxxxx-02` | pending | `<local runtime/test evidence that directly exercises the criteria>` |
+| `Experience: <journey/input/viewport, or N/A - reason>` | pending | `<clean runtime evidence, or local: why no user-facing surface changed>` |
+| `<Standard repository check>` | pending | `<summary or link>` |
+| `Risk: <risk-specific local check>` | pending | `local: <risk exercised and result>` |
+
+Remote CI or review links may supplement this local evidence; they do not replace it.
 
 ## Open Questions
 

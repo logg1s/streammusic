@@ -1,7 +1,7 @@
 # `CHG-20260819-2183b483-android-tv-release`
 
 Change-ID: `CHG-20260819-2183b483`
-Status: verified
+Status: finalized
 Lane: critical
 Owner: `Vong maintainers`
 Decision-Owner: `User / Vong maintainer`
@@ -71,6 +71,7 @@ local browser would not be a usable product.
 | Android phone signed release verification | pass | `Vong_0.8.0_arm64.apk` built from tag `v0.8.0`; APK Signature Scheme v2 verified against pinned signer SHA-256 `8168DF6ECC7B9F9AE63BF0A5EA27CFE20BBC8755D89F54456CEC769A2D24D3F1`; exact ABI set is `arm64-v8a`; artifact SHA-256 is `030336eb7f010033585b61cc65812c5c584f58ea59e451bf9dd8d72d86ebcc2a`. |
 | Android TV signed release D-pad/playback smoke test | pass | Debug TV coverage exercised all primary D-pad and MediaSession paths. The signed release variant was additionally built for the emulator's `x86_64` ABI, signed with the pinned release certificate, installed on Android TV API 36, resolved through the Leanback launcher, rendered the production pairing challenge, stayed foreground, and emitted no fatal runtime exception. The published ARM artifact passed exact ABI and manifest gates. |
 | GitHub release asset verification | pass | GitHub Release `v0.8.0` publishes both APKs and adjacent checksum files. Assets downloaded back from GitHub matched their checksum files and pinned signer. Universal TV SHA-256 is `6f4325da46b61db57aa41744b1f5bdddd568e7e40bc23e0e28c5cbcd9ba57f89`, exact ABI set is `armeabi-v7a,arm64-v8a`, Leanback launcher is present, and touchscreen is optional. Production `/api/releases/latest` returns both 0.8.0 Android URLs. |
+| Risk: signed artifact integrity, ABI compatibility and auth/media isolation | pass | local: completion gate on 2026-08-21 passed 146 tests, web/shared/mobile typecheck and lint, production build and Rust clippy; signer, checksums, exact ABIs, Leanback manifest and release-variant TV smoke evidence remain recorded above. |
 
 ## Open Questions
 

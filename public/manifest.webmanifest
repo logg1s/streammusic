@@ -1,7 +1,7 @@
 {
   "name": "Vọng",
   "short_name": "Vọng",
-  "description": "Nghe nhạc từ kho lưu trữ của bạn và từ YouTube.",
+  "description": "Nghe nhạc trực tiếp từ Google Drive, Dropbox, OneDrive và YouTube.",
   "lang": "vi",
   "start_url": "/",
   "scope": "/",

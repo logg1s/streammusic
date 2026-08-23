@@ -1,7 +1,7 @@
 # `CHG-20260820-0cdee47b-device-pairing`
 
 Change-ID: `CHG-20260820-0cdee47b`
-Status: verified
+Status: finalized
 Lane: critical
 Owner: `Vong maintainers`
 Decision-Owner: `User / Vong maintainer`
@@ -82,6 +82,7 @@ an explicit account confirmation before the target receives its own session.
 | Web browser QA | pass | Desktop `/login` and phone `/pair` inspected with no console errors; isolated Playwright pairing flow passed as part of 6/6 tests |
 | Android TV QA | pass | Universal debug APK built successfully; API 36 TV AVD accessibility tree showed QR, manual code, `/pair` address and waiting state within 1920x1080; pending polling and remote QR load succeeded |
 | `python scripts/verify.py` | pass | SDD check, 14 test files / 143 tests, production Next build, web/mobile lint and typecheck, and Rust clippy passed on 2026-08-20 |
+| Risk: pairing secrecy, replay protection and target-bound approval | pass | local: focused pairing tests covered target binding, QR secrecy, cookie flags, canonical callback, approval, replay and expiry; the 2026-08-21 completion gate additionally passed 146 tests, production build, mobile checks and Rust clippy. |
 
 ## Open Questions
 
