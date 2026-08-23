@@ -37,7 +37,7 @@ import { colors, font, radius, spacing } from "@/theme";
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { data, error, loading, reload } = useApi<PlaylistDetail>(
+  const { data, error, loading, version, reload } = useApi<PlaylistDetail>(
     `/api/playlists/${id}`,
   );
   const content = useContentInsets();
@@ -45,17 +45,23 @@ export default function PlaylistScreen() {
   /**
    * Bản chi tiết chụp lại ngay trước một lệnh sửa.
    *
-   * `useApi` trả `data === null` suốt lượt gọi lại, mà sửa playlist thì lần nào cũng gọi
-   * lại — bám thẳng vào `data` thì bấm ▲ một cái là cả màn hình nháy về vòng quay rồi
-   * dựng lại. Bản chụp lấp đúng quãng đó, và nhường chỗ ngay khi dữ liệu mới về.
+   * `useApi` giữ lại dữ liệu cũ suốt lượt gọi lại. Bản chụp lấp đúng quãng đó để
+   * thứ tự vừa kéo không bật lại rồi nhường chỗ ngay khi dữ liệu mới về.
    */
   const [snapshot, setSnapshot] = useState<PlaylistDetail | null>(null);
+  const [snapshotVersion, setSnapshotVersion] = useState(-1);
   const [renaming, setRenaming] = useState(false);
   /** Chặn bấm chồng: hai lệnh đổi thứ tự gối nhau thì lệnh sau ghi đè bằng thứ tự cũ. */
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const shown = data ?? snapshot;
+  // `useApi` deliberately retains the last response while `reload()` is in flight.
+  // Prefer our mutation snapshot until a later response version confirms the new
+  // order, so a dropped row never briefly jumps back to its old position.
+  const shown =
+    snapshot !== null && (loading || version === snapshotVersion || data === null)
+      ? snapshot
+      : data;
   const items = useMemo(() => shown?.items ?? [], [shown]);
   // `items` mang thêm `itemId` (khoá của dòng trong playlist) mà player không cần;
   // memo để `TrackRow` không nhận mảng mới sau mỗi lần render và mất `memo`.
@@ -70,6 +76,7 @@ export default function PlaylistScreen() {
     setBusy(true);
     setActionError(null);
     setSnapshot(optimistic ?? shown);
+    setSnapshotVersion(version);
     try {
       await work();
       reload();

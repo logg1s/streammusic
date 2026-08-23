@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vọng",
     "slug": "vong",
-    "version": "0.10.2",
+    "version": "0.10.3",
     "icon": "./assets/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -10,7 +10,7 @@
     "scheme": "vong",
     "android": {
       "package": "app.vong.mobile",
-      "versionCode": 14,
+      "versionCode": 15,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b0b0f"

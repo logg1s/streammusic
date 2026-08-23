@@ -215,6 +215,18 @@ function QueueRow({
       {!current ? (
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={`Phát tiếp: ${item.track.title}`}
+          accessibilityHint="Đưa bài này lên ngay sau bài đang phát"
+          onPress={() => usePlayer.getState().moveToNext(item.orderPosition)}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+        >
+          <Ionicons name="play-skip-forward" size={20} color={colors.muted} />
+        </Pressable>
+      ) : null}
+
+      {!current ? (
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel={`Bỏ khỏi hàng đợi: ${item.track.title}`}
           onPress={() => usePlayer.getState().removeAt(item.orderPosition)}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}

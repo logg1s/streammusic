@@ -228,14 +228,16 @@ describe("removeAt / moveToNext", () => {
     expect(store.peekNextTrack()?.id).toBe("c");
   });
 
-  it("moveUpcoming chỉ sắp xếp phần chưa phát và giữ nguyên bài hiện tại", () => {
+  it("moveUpcoming trong radio chỉ sắp xếp phần chưa phát và giữ nguyên bài hiện tại", () => {
     get().playQueue([a, b, c, d], 1);
+    get().startRadio(b);
 
     get().moveUpcoming(3, 2);
 
     expect(get().order).toEqual([0, 1, 3, 2]);
     expect(get().position).toBe(1);
     expect(get().queue[get().order[get().position]]?.id).toBe("b");
+    expect(get().radio?.seedId).toBe("b");
   });
 
   it("bài đã bỏ khỏi radio không thể được append trở lại", () => {
